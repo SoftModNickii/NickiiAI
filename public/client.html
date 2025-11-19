@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICKII AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #ffeef8 0%, #fff5f7 50%, #ffffff 100%);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Ambient glow effect */
+        .ambient-glow {
+            position: fixed;
+            width: 800px;
+            height: 800px;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.3;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .glow-1 {
+            top: -200px;
+            right: -200px;
+            background: radial-gradient(circle, #ff6b9d 0%, transparent 70%);
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .glow-2 {
+            bottom: -300px;
+            left: -200px;
+            background: radial-gradient(circle, #c084fc 0%, transparent 70%);
+            animation: float 25s ease-in-out infinite reverse;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(50px, 50px) scale(1.1); }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 40px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #ff6b9d 0%, #ff8fab 100%);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: 800;
+            color: white;
+            box-shadow: 0 10px 30px rgba(255, 107, 157, 0.4);
+        }
+
+        .brand-text h1 {
+            font-size: 36px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -1px;
+        }
+
+        .brand-text p {
+            font-size: 14px;
+            color: #94a3b8;
+            font-weight: 500;
+            margin-top: 2px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 107, 157, 0.15);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-dot.disconnected {
+            background: #ef4444;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.3); }
+        }
+
+        .status-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            gap: 30px;
+            overflow: hidden;
+            align-items: center;
+        }
+
+        .video-section {
+            flex: 1.2;
+            display: flex;
+            flex-direction: column;
+            max-width: 900px;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(30px);
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 
+                0 30px 80px rgba(0, 0, 0, 0.1),
+                0 0 0 1px rgba(255, 255, 255, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        }
+
+        #remoteVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+            background: #000;
+        }
+
+        /* Glitter particles overlay */
+        .glitter-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 3;
+            overflow: hidden;
+        }
+
+        .glitter {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(255, 182, 193, 0.6) 50%, transparent 100%);
+            border-radius: 50%;
+            animation: sparkle 3s infinite;
+            opacity: 0;
+        }
+
+        @keyframes sparkle {
+            0%, 100% { 
+                opacity: 0;
+                transform: scale(0) rotate(0deg);
+            }
+            50% { 
+                opacity: 1;
+                transform: scale(1.5) rotate(180deg);
+            }
+        }
+
+        /* Create multiple glitter particles with delays */
+        .glitter:nth-child(1) { top: 20%; left: 10%; animation-delay: 0s; }
+        .glitter:nth-child(2) { top: 40%; left: 80%; animation-delay: 0.5s; }
+        .glitter:nth-child(3) { top: 60%; left: 30%; animation-delay: 1s; }
+        .glitter:nth-child(4) { top: 15%; left: 70%; animation-delay: 1.5s; }
+        .glitter:nth-child(5) { top: 80%; left: 50%; animation-delay: 2s; }
+        .glitter:nth-child(6) { top: 35%; left: 15%; animation-delay: 2.5s; }
+        .glitter:nth-child(7) { top: 70%; left: 85%; animation-delay: 0.7s; }
+        .glitter:nth-child(8) { top: 25%; left: 45%; animation-delay: 1.2s; }
+        .glitter:nth-child(9) { top: 55%; left: 65%; animation-delay: 1.8s; }
+        .glitter:nth-child(10) { top: 90%; left: 25%; animation-delay: 2.3s; }
+        .glitter:nth-child(11) { top: 10%; left: 55%; animation-delay: 0.3s; }
+        .glitter:nth-child(12) { top: 45%; left: 90%; animation-delay: 1.7s; }
+
+        /* Holographic overlay effect */
+        .video-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                linear-gradient(
+                    45deg,
+                    transparent 30%,
+                    rgba(255, 107, 157, 0.03) 50%,
+                    transparent 70%
+                );
+            background-size: 200% 200%;
+            animation: shimmer 3s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        /* Scanline effect for AI feel */
+        .video-wrapper::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(255, 107, 157, 0.02) 2px,
+                rgba(255, 107, 157, 0.02) 4px
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        #remoteVideo.active {
+            display: block;
+        }
+
+        .video-placeholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #ffeef8 0%, #ffffff 100%);
+        }
+
+        .video-placeholder.hidden {
+            display: none;
+        }
+
+        .pulse-ring {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 3px solid #ff6b9d;
+            position: relative;
+            animation: pulseRing 2s ease-out infinite;
+        }
+
+        @keyframes pulseRing {
+            0% {
+                transform: scale(0.95);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        .pulse-ring::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%);
+            border-radius: 50%;
+            box-shadow: 0 10px 30px rgba(255, 107, 157, 0.4);
+        }
+
+        .placeholder-text {
+            margin-top: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+
+        .interaction-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 28px;
+            border: 1px solid rgba(255, 107, 157, 0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ff6b9d;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 18px;
+        }
+
+        .prompt-input-wrapper {
+            position: relative;
+        }
+
+        #promptInput {
+            width: 100%;
+            padding: 18px 60px 18px 20px;
+            font-size: 15px;
+            border: 2px solid rgba(255, 107, 157, 0.15);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #1e293b;
+            outline: none;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        #promptInput:focus {
+            border-color: #ff6b9d;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(255, 107, 157, 0.1);
+        }
+
+        #promptInput::placeholder {
+            color: #cbd5e1;
+        }
+
+        .send-button {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #ff6b9d 0%, #ff8fab 100%);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(255, 107, 157, 0.3);
+        }
+
+        .send-button:hover {
+            transform: translateY(-50%) scale(1.05);
+            box-shadow: 0 6px 20px rgba(255, 107, 157, 0.4);
+        }
+
+        .send-button:active {
+            transform: translateY(-50%) scale(0.95);
+        }
+
+        .send-icon {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        .info-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .info-card {
+            background: linear-gradient(135deg, rgba(255, 107, 157, 0.1) 0%, rgba(192, 132, 252, 0.1) 100%);
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid rgba(255, 107, 157, 0.15);
+        }
+
+        .info-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 6px;
+        }
+
+        .info-value {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .info-cards {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .brand-text h1 {
+                font-size: 28px;
+            }
+            
+            .info-cards {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+
+    <div class="container">
+        <div class="header">
+            <div class="brand">
+                <div class="logo-icon">N</div>
+                <div class="brand-text">
+                    <h1>NICKII AI</h1>
+                    <p>Advanced Intelligence System</p>
+                </div>
+            </div>
+            <div class="status-badge">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-text" id="statusText">Initializing...</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="video-section">
+                <div class="video-wrapper">
+                    <video id="remoteVideo" autoplay playsinline></video>
+                    <div class="video-placeholder" id="placeholder">
+                        <div class="pulse-ring"></div>
+                        <div class="placeholder-text">Connecting to Nickii's neural network...</div>
+                    </div>
+                    <div class="glitter-container">
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                        <div class="glitter"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interaction-panel">
+                <div class="panel-card">
+                    <div class="panel-title">Neural Interface</div>
+                    <div class="prompt-input-wrapper">
+                        <input 
+                            type="text" 
+                            id="promptInput" 
+                            placeholder="Enter your query..."
+                            autocomplete="off"
+                        >
+                        <button class="send-button" id="sendButton">
+                            <svg class="send-icon" viewBox="0 0 24 24">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="panel-card" style="flex: 1;">
+                    <div class="panel-title">Neural Parameters</div>
+                    <div class="info-cards">
+                        <div class="info-card">
+                            <div class="info-label">Seed</div>
+                            <div class="info-value" id="seed">7734</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-label">Temperature</div>
+                            <div class="info-value">0.7</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-label">Model</div>
+                            <div class="info-value" id="connectionStatus">...</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-label">Tokens</div>
+                            <div class="info-value" id="tokens">2048</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Privacy Notice -->
+        <div style="position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); max-width: 600px; width: 90%; z-index: 100;">
+            <div style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); border-radius: 16px; padding: 16px 20px; border: 1px solid rgba(255, 107, 157, 0.2); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08); display: flex; align-items: center; gap: 12px;" id="privacyNotice">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0;">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="#ff6b9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <div style="flex: 1;">
+                    <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
+                        To train Nickii's neural network, we capture video and audio from your device. This data helps improve AI responses.
+                    </div>
+                </div>
+                <button onclick="document.getElementById('privacyNotice').style.display='none'" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 20px; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">×</button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="position: fixed; bottom: 20px; left: 0; right: 0; z-index: 100;">
+            <div style="max-width: 1600px; margin: 0 auto; padding: 0 40px; display: flex; justify-content: center; gap: 30px; flex-wrap: wrap;">
+                <a href="#" onclick="showModal('about'); return false;" style="color: #94a3b8; text-decoration: none; font-size: 13px; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#ff6b9d'" onmouseout="this.style.color='#94a3b8'">About</a>
+                <a href="#" onclick="showModal('privacy'); return false;" style="color: #94a3b8; text-decoration: none; font-size: 13px; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#ff6b9d'" onmouseout="this.style.color='#94a3b8'">Privacy Policy</a>
+                <a href="#" onclick="showModal('terms'); return false;" style="color: #94a3b8; text-decoration: none; font-size: 13px; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#ff6b9d'" onmouseout="this.style.color='#94a3b8'">Terms of Service</a>
+                <a href="#" onclick="showModal('impressum'); return false;" style="color: #94a3b8; text-decoration: none; font-size: 13px; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#ff6b9d'" onmouseout="this.style.color='#94a3b8'">Impressum</a>
+                <a href="#" onclick="showModal('contact'); return false;" style="color: #94a3b8; text-decoration: none; font-size: 13px; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#ff6b9d'" onmouseout="this.style.color='#94a3b8'">Contact</a>
+            </div>
+        </div>
+
+        <!-- Modal Overlay -->
+        <div id="modalOverlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(8px); z-index: 1000; animation: fadeIn 0.2s;" onclick="closeModal()"></div>
+        
+        <!-- Modal Content -->
+        <div id="modalContent" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; background: white; border-radius: 24px; padding: 40px; z-index: 1001; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2); animation: slideUp 0.3s;">
+            <button onclick="closeModal()" style="position: absolute; top: 20px; right: 20px; background: rgba(255, 107, 157, 0.1); border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 20px; color: #ff6b9d; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(255, 107, 157, 0.2)'" onmouseout="this.style.background='rgba(255, 107, 157, 0.1)'">×</button>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translate(-50%, -45%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+        
+        #modalContent::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #modalContent::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        #modalContent::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%);
+            border-radius: 4px;
+        }
+    </style>
+
+    <script>
+        // WebSocket connection
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}`;
+        let ws;
+        let peerConnection;
+        let connectionStartTime;
+        let viewerStream; // For sending viewer's webcam back
+        let returnPeerConnection; // Separate connection for return feed
+        
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const placeholder = document.getElementById('placeholder');
+        const promptInput = document.getElementById('promptInput');
+        const sendButton = document.getElementById('sendButton');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const seedDisplay = document.getElementById('seed');
+        const tokensDisplay = document.getElementById('tokens');
+
+        // Initialize WebSocket
+        function connectWebSocket() {
+            connectionStartTime = Date.now();
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('Connected to server');
+                statusDot.classList.remove('disconnected');
+                statusText.textContent = 'Connected';
+                connectionStatus.textContent = 'v4.5';
+                
+                // Register as viewer
+                ws.send(JSON.stringify({ type: 'register-viewer' }));
+                
+                // Initialize WebRTC for receiving video
+                initializePeerConnection();
+                
+                // Start viewer's webcam to send back to controller
+                startViewerWebcam();
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('Received message:', data.type);
+
+                    switch (data.type) {
+                        case 'webrtc-offer':
+                            console.log('Received WebRTC offer');
+                            handleOffer(data.offer);
+                            break;
+                        
+                        case 'webrtc-ice-candidate':
+                            console.log('Received ICE candidate');
+                            handleIceCandidate(data.candidate);
+                            break;
+                        
+                        case 'return-feed-answer':
+                            console.log('Received return feed answer');
+                            handleReturnFeedAnswer(data.answer);
+                            break;
+                        
+                        case 'return-feed-ice':
+                            console.log('Received return feed ICE');
+                            handleReturnFeedIce(data.candidate);
+                            break;
+                    }
+                } catch (error) {
+                    console.error('Error parsing message:', error);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected from server');
+                statusDot.classList.add('disconnected');
+                statusText.textContent = 'Reconnecting...';
+                connectionStatus.textContent = 'Offline';
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        // Initialize WebRTC peer connection
+        function initializePeerConnection() {
+            const configuration = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            };
+
+            peerConnection = new RTCPeerConnection(configuration);
+
+            // Handle incoming tracks
+            peerConnection.ontrack = (event) => {
+                console.log('Received remote track:', event.track.kind);
+                if (event.streams && event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                    remoteVideo.classList.add('active');
+                    placeholder.classList.add('hidden');
+                    
+                    // Auto-play with audio (browsers may block this)
+                    remoteVideo.play().catch(e => {
+                        console.log('Autoplay blocked, user interaction needed');
+                        // Click anywhere on page to start
+                        document.addEventListener('click', () => {
+                            remoteVideo.play();
+                        }, { once: true });
+                    });
+                }
+            };
+
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log('Sending ICE candidate to controller');
+                    ws.send(JSON.stringify({
+                        type: 'webrtc-ice-candidate',
+                        candidate: event.candidate,
+                        target: 'controller'
+                    }));
+                }
+            };
+
+            // Log connection state changes
+            peerConnection.onconnectionstatechange = () => {
+                console.log('Connection state:', peerConnection.connectionState);
+                const state = peerConnection.connectionState;
+                
+                if (state === 'connected') {
+                    connectionStatus.textContent = 'v4.5';
+                } else if (state === 'connecting') {
+                    connectionStatus.textContent = 'Init';
+                } else if (state === 'failed' || state === 'disconnected') {
+                    connectionStatus.textContent = 'Error';
+                }
+            };
+
+            peerConnection.oniceconnectionstatechange = () => {
+                console.log('ICE connection state:', peerConnection.iceConnectionState);
+            };
+        }
+
+        // Handle incoming WebRTC offer
+        async function handleOffer(offer) {
+            try {
+                console.log('Setting remote description from offer');
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                
+                console.log('Creating answer');
+                const answer = await peerConnection.createAnswer();
+                
+                console.log('Setting local description');
+                await peerConnection.setLocalDescription(answer);
+                
+                console.log('Sending answer to controller');
+                ws.send(JSON.stringify({
+                    type: 'webrtc-answer',
+                    answer: answer,
+                    target: 'controller'
+                }));
+            } catch (error) {
+                console.error('Error handling offer:', error);
+            }
+        }
+
+        // Handle incoming ICE candidate
+        async function handleIceCandidate(candidate) {
+            try {
+                if (candidate) {
+                    console.log('Adding ICE candidate');
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+            } catch (error) {
+                console.error('Error adding ICE candidate:', error);
+            }
+        }
+
+        // Send prompt
+        function sendPrompt() {
+            const text = promptInput.value.trim();
+            if (text && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'prompt',
+                    text: text
+                }));
+                promptInput.value = '';
+                console.log('Prompt sent:', text);
+            }
+        }
+
+        // Event listeners
+        sendButton.addEventListener('click', sendPrompt);
+        promptInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendPrompt();
+            }
+        });
+
+        // Animate seed and tokens for AI effect
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // Random seed changes
+                const newSeed = Math.floor(Math.random() * 9000) + 1000;
+                seedDisplay.textContent = newSeed;
+                
+                // Token count variations
+                const newTokens = Math.floor(Math.random() * 512) + 1536;
+                tokensDisplay.textContent = newTokens;
+            }
+        }, 3000);
+
+        // Modal functions
+        const modalContent = {
+            about: {
+                title: 'About NICKII AI',
+                content: `
+                    <h2 style="font-size: 28px; font-weight: 800; background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px;">About NICKII AI</h2>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        NICKII AI is an advanced neural intelligence system designed to provide natural, intuitive interactions through cutting-edge artificial intelligence technology.
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        Our system utilizes state-of-the-art machine learning algorithms and neural networks to understand and respond to complex queries in real-time.
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8;">
+                        Built with privacy and performance in mind, NICKII AI represents the future of human-AI interaction.
+                    </p>
+                `
+            },
+            privacy: {
+                title: 'Privacy Policy',
+                content: `
+                    <h2 style="font-size: 28px; font-weight: 800; background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px;">Privacy Policy</h2>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">Data Collection:</strong><br>
+                        NICKII AI collects video and audio data from your device to train and improve our neural network. This data is used to enhance AI responses and system performance.
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">Data Usage:</strong><br>
+                        All collected data is processed in real-time for AI training purposes. We use this information to improve response accuracy and system capabilities.
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">Your Rights:</strong><br>
+                        You have the right to access, modify, or delete your data at any time. You can revoke camera and microphone permissions through your browser settings.
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8;">
+                        <strong style="color: #1e293b;">Security:</strong><br>
+                        We implement industry-standard security measures to protect your data during transmission and processing.
+                    </p>
+                `
+            },
+            terms: {
+                title: 'Terms of Service',
+                content: `
+                    <h2 style="font-size: 28px; font-weight: 800; background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px;">Terms of Service</h2>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        By using NICKII AI, you agree to the following terms and conditions:
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">1. Acceptable Use:</strong><br>
+                        You agree to use NICKII AI for lawful purposes only and in a manner that does not infringe upon the rights of others.
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">2. Service Availability:</strong><br>
+                        We strive to maintain continuous service availability but do not guarantee uninterrupted access to NICKII AI.
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">3. Intellectual Property:</strong><br>
+                        All content and technology associated with NICKII AI is protected by intellectual property rights.
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8;">
+                        <strong style="color: #1e293b;">4. Modifications:</strong><br>
+                        We reserve the right to modify these terms at any time. Continued use constitutes acceptance of updated terms.
+                    </p>
+                `
+            },
+            impressum: {
+                title: 'Impressum',
+                content: `
+                    <h2 style="font-size: 28px; font-weight: 800; background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px;">Impressum</h2>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">Service Provider:</strong><br>
+                        NICKII AI Advanced Intelligence Systems
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">Responsible for Content:</strong><br>
+                        NICKII AI Development Team
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">Technical Infrastructure:</strong><br>
+                        Neural Network Processing<br>
+                        Real-time AI Communication System
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8;">
+                        <strong style="color: #1e293b;">Regulatory Compliance:</strong><br>
+                        This service complies with applicable data protection and AI regulations.
+                    </p>
+                `
+            },
+            contact: {
+                title: 'Contact',
+                content: `
+                    <h2 style="font-size: 28px; font-weight: 800; background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px;">Contact Us</h2>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        We'd love to hear from you. Get in touch with the NICKII AI team:
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">General Inquiries:</strong><br>
+                        info@nickii-ai.com
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">Technical Support:</strong><br>
+                        support@nickii-ai.com
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8; margin-bottom: 16px;">
+                        <strong style="color: #1e293b;">Partnership Opportunities:</strong><br>
+                        partnerships@nickii-ai.com
+                    </p>
+                    <p style="color: #64748b; line-height: 1.8;">
+                        <strong style="color: #1e293b;">Response Time:</strong><br>
+                        We typically respond within 24-48 hours during business days.
+                    </p>
+                `
+            }
+        };
+
+        function showModal(type) {
+            const modal = modalContent[type];
+            if (modal) {
+                document.getElementById('modalBody').innerHTML = modal.content;
+                document.getElementById('modalOverlay').style.display = 'block';
+                document.getElementById('modalContent').style.display = 'block';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+            document.getElementById('modalContent').style.display = 'none';
+        }
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Start viewer's webcam to send back to controller
+        async function startViewerWebcam() {
+            try {
+                console.log('Starting viewer webcam for return feed...');
+                
+                // Get viewer's webcam
+                viewerStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: true 
+                });
+                
+                console.log('Viewer webcam started');
+                
+                // Create separate peer connection for return feed
+                const configuration = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                };
+                
+                returnPeerConnection = new RTCPeerConnection(configuration);
+                
+                // Add viewer's webcam tracks
+                viewerStream.getTracks().forEach(track => {
+                    returnPeerConnection.addTrack(track, viewerStream);
+                    console.log('Added viewer track:', track.kind);
+                });
+                
+                // Handle ICE candidates for return feed
+                returnPeerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        console.log('Sending return feed ICE candidate');
+                        ws.send(JSON.stringify({
+                            type: 'return-feed-ice',
+                            candidate: event.candidate,
+                            target: 'controller'
+                        }));
+                    }
+                };
+                
+                // Create offer to send viewer's webcam
+                const offer = await returnPeerConnection.createOffer();
+                await returnPeerConnection.setLocalDescription(offer);
+                
+                console.log('Sending return feed offer to controller');
+                ws.send(JSON.stringify({
+                    type: 'return-feed-offer',
+                    offer: offer,
+                    target: 'controller'
+                }));
+                
+            } catch (error) {
+                console.log('Viewer webcam not available:', error.message);
+                // This is okay - viewer might not have a webcam
+            }
+        }
+        
+        // Handle return feed answer from controller
+        async function handleReturnFeedAnswer(answer) {
+            try {
+                await returnPeerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                console.log('Return feed connection established');
+            } catch (error) {
+                console.error('Error handling return feed answer:', error);
+            }
+        }
+        
+        // Handle return feed ICE candidate
+        async function handleReturnFeedIce(candidate) {
+            try {
+                if (candidate && returnPeerConnection) {
+                    await returnPeerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+            } catch (error) {
+                console.error('Error adding return feed ICE:', error);
+            }
+        }
+
+        // Start connection
+        connectWebSocket();
+    </script>
+</body>
+</html>

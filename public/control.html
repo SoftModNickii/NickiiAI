@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICKII AI - Control Panel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0d0d0d;
+            color: #00ff41;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            border: 2px solid #00ff41;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: rgba(0, 255, 65, 0.05);
+        }
+
+        .title {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px #00ff41;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #00aa2e;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            border: 2px solid #00ff41;
+            padding: 20px;
+            background: rgba(0, 255, 65, 0.02);
+        }
+
+        .panel-header {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #00ff41;
+            color: #00ff41;
+        }
+
+        .video-preview {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border: 1px solid #00ff41;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #00aa2e;
+            margin-bottom: 15px;
+        }
+
+        #localVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+            background: #000;
+        }
+
+        #localVideo.active {
+            display: block;
+        }
+
+        #returnVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+            background: #000;
+        }
+
+        #returnVideo:not([style*="display: none"]) {
+            display: block;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label {
+            font-size: 12px;
+            color: #00aa2e;
+        }
+
+        select, button {
+            background: #000;
+            color: #00ff41;
+            border: 1px solid #00ff41;
+            padding: 10px 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        select:hover, button:hover {
+            background: rgba(0, 255, 65, 0.1);
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(0, 255, 65, 0.05);
+            border: 1px solid #00ff41;
+            margin-bottom: 10px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+        }
+
+        .status-dot.connected {
+            background: #00ff41;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 5px #00ff41; }
+            50% { opacity: 0.5; box-shadow: 0 0 20px #00ff41; }
+        }
+
+        .prompt-monitor {
+            border: 2px solid #00ff41;
+            padding: 20px;
+            background: rgba(0, 255, 65, 0.02);
+            margin-top: 20px;
+        }
+
+        .prompts-container {
+            height: 250px;
+            overflow-y: auto;
+            background: #000;
+            border: 1px solid #00ff41;
+            padding: 15px;
+            font-size: 13px;
+        }
+
+        .prompts-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .prompts-container::-webkit-scrollbar-track {
+            background: #0d0d0d;
+        }
+
+        .prompts-container::-webkit-scrollbar-thumb {
+            background: #00ff41;
+        }
+
+        .prompt-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(0, 255, 65, 0.05);
+            border-left: 3px solid #00ff41;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .prompt-time {
+            font-size: 11px;
+            color: #00aa2e;
+            margin-bottom: 5px;
+        }
+
+        .prompt-text {
+            color: #00ff41;
+            word-wrap: break-word;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .stat-box {
+            background: rgba(0, 255, 65, 0.05);
+            border: 1px solid #00ff41;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            color: #00ff41;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #00aa2e;
+        }
+
+        .log-entry {
+            font-size: 11px;
+            color: #00aa2e;
+            margin-bottom: 3px;
+        }
+
+        .audio-notice {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid #ffc107;
+            color: #ffc107;
+            padding: 10px;
+            font-size: 12px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">NICKII AI - CONTROL PANEL</div>
+            <div class="subtitle">Backend Management Interface</div>
+        </div>
+
+        <div class="grid">
+            <div class="panel">
+                <div class="panel-header">VIDEO STREAM</div>
+                
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <div id="statusText">DISCONNECTED</div>
+                </div>
+
+                <div class="audio-notice" id="audioNotice" style="display: none;">
+                    ⚠️ For audio: Use "SCREEN SHARE + AUDIO" and check "Share system audio"
+                </div>
+
+                <div class="video-preview">
+                    <video id="localVideo" autoplay muted playsinline></video>
+                    <div id="videoPlaceholder">NO SIGNAL</div>
+                </div>
+
+                <div class="controls">
+                    <div class="control-group">
+                        <label>CAMERA SOURCE</label>
+                        <select id="cameraSelect">
+                            <option value="">Select Camera...</option>
+                        </select>
+                    </div>
+
+                    <button id="startBtn">START CAMERA</button>
+                    <button id="screenShareBtn">START SCREEN SHARE + AUDIO</button>
+                    <button id="stopBtn" disabled>STOP STREAM</button>
+                </div>
+
+                <div class="prompt-monitor" style="margin-top: 20px;">
+                    <div class="panel-header">INCOMING PROMPTS</div>
+                    <div class="prompts-container" id="promptsContainer">
+                        <div class="log-entry">Waiting for prompts...</div>
+                    </div>
+                </div>
+
+                <div class="prompt-monitor" style="margin-top: 20px;">
+                    <div class="panel-header">VIEWER FEED (What they see)</div>
+                    <div class="video-preview" style="height: 300px;">
+                        <video id="returnVideo" autoplay playsinline muted></video>
+                        <div id="returnPlaceholder">NO VIEWER CONNECTED</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">SYSTEM STATUS</div>
+                
+                <div class="stats">
+                    <div class="stat-box">
+                        <div class="stat-value" id="viewerCount">0</div>
+                        <div class="stat-label">VIEWERS</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="promptCount">0</div>
+                        <div class="stat-label">PROMPTS</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="uptime">00:00</div>
+                        <div class="stat-label">UPTIME</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <div class="panel-header">SYSTEM LOG</div>
+                    <div class="prompts-container" id="systemLog" style="height: 400px;">
+                        <div class="log-entry">[SYSTEM] Initializing...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}`;
+        let ws;
+        let peerConnection;
+        let localStream;
+        let startTime = Date.now();
+        let returnPeerConnection; // For receiving viewer's webcam
+
+        // DOM elements
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const localVideo = document.getElementById('localVideo');
+        const videoPlaceholder = document.getElementById('videoPlaceholder');
+        const audioNotice = document.getElementById('audioNotice');
+        const cameraSelect = document.getElementById('cameraSelect');
+        const startBtn = document.getElementById('startBtn');
+        const screenShareBtn = document.getElementById('screenShareBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const promptsContainer = document.getElementById('promptsContainer');
+        const systemLog = document.getElementById('systemLog');
+        const promptCount = document.getElementById('promptCount');
+        const uptime = document.getElementById('uptime');
+        const returnVideo = document.getElementById('returnVideo');
+        const returnPlaceholder = document.getElementById('returnPlaceholder');
+
+        let promptCounter = 0;
+
+        // Initialize WebSocket
+        function connectWebSocket() {
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                log('Connected to server');
+                statusDot.classList.add('connected');
+                statusText.textContent = 'CONNECTED';
+                
+                // Register as controller
+                ws.send(JSON.stringify({ type: 'register-controller' }));
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    switch (data.type) {
+                        case 'prompt':
+                            handlePrompt(data.text, data.timestamp);
+                            break;
+                        
+                        case 'webrtc-answer':
+                            log('Received WebRTC answer from viewer');
+                            handleAnswer(data.answer);
+                            break;
+                        
+                        case 'webrtc-ice-candidate':
+                            log('Received ICE candidate from viewer');
+                            handleIceCandidate(data.candidate);
+                            break;
+                        
+                        case 'return-feed-offer':
+                            log('Received viewer webcam offer');
+                            handleReturnFeedOffer(data.offer);
+                            break;
+                        
+                        case 'return-feed-ice':
+                            log('Received viewer ICE candidate');
+                            handleReturnFeedIce(data.candidate);
+                            break;
+                    }
+                } catch (error) {
+                    console.error('Error parsing message:', error);
+                    log('Error: ' + error.message);
+                }
+            };
+
+            ws.onclose = () => {
+                log('Disconnected from server');
+                statusDot.classList.remove('connected');
+                statusText.textContent = 'DISCONNECTED';
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                log('WebSocket error occurred');
+            };
+        }
+
+        // Load available cameras
+        async function loadCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const cameras = devices.filter(device => device.kind === 'videoinput');
+                
+                cameraSelect.innerHTML = '<option value="">Select Camera...</option>';
+                cameras.forEach((camera, index) => {
+                    const option = document.createElement('option');
+                    option.value = camera.deviceId;
+                    option.textContent = camera.label || `Camera ${index + 1}`;
+                    cameraSelect.appendChild(option);
+                });
+                
+                log(`Found ${cameras.length} camera(s)`);
+            } catch (error) {
+                log('Error loading cameras: ' + error.message);
+            }
+        }
+
+        // Start camera
+        async function startCamera() {
+            try {
+                const deviceId = cameraSelect.value;
+                if (!deviceId) {
+                    alert('Please select a camera first');
+                    return;
+                }
+
+                log('Starting camera...');
+
+                const constraints = {
+                    video: { deviceId: { exact: deviceId } },
+                    audio: true
+                };
+
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                localVideo.srcObject = localStream;
+                localVideo.classList.add('active');
+                videoPlaceholder.style.display = 'none';
+
+                const audioTracks = localStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    log(`Audio track: ${audioTracks[0].label}`);
+                } else {
+                    log('No audio - use Screen Share for audio');
+                    audioNotice.style.display = 'block';
+                }
+
+                startBtn.disabled = true;
+                screenShareBtn.disabled = true;
+                stopBtn.disabled = false;
+
+                log('Camera started successfully');
+                
+                initializePeerConnection();
+            } catch (error) {
+                log('Error: ' + error.message);
+                alert('Failed to start camera');
+            }
+        }
+
+        // Start screen share with audio
+        async function startScreenShare() {
+            try {
+                log('Starting screen share...');
+
+                const constraints = {
+                    video: { cursor: "always" },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                };
+
+                localStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+                localVideo.srcObject = localStream;
+                localVideo.classList.add('active');
+                videoPlaceholder.style.display = 'none';
+
+                const audioTracks = localStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    log(`Audio captured: ${audioTracks[0].label}`);
+                } else {
+                    log('No audio - check "Share audio" box next time');
+                }
+
+                startBtn.disabled = true;
+                screenShareBtn.disabled = true;
+                stopBtn.disabled = false;
+
+                log('Screen share started');
+                
+                initializePeerConnection();
+
+                localStream.getVideoTracks()[0].onended = () => {
+                    log('Screen sharing stopped');
+                    stopCamera();
+                };
+            } catch (error) {
+                log('Error: ' + error.message);
+                alert('Failed to start screen share');
+            }
+        }
+
+        // Stop camera
+        function stopCamera() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            localVideo.srcObject = null;
+            localVideo.classList.remove('active');
+            videoPlaceholder.style.display = 'flex';
+            audioNotice.style.display = 'none';
+
+            startBtn.disabled = false;
+            screenShareBtn.disabled = false;
+            stopBtn.disabled = true;
+
+            log('Stream stopped');
+        }
+
+        // Initialize WebRTC
+        function initializePeerConnection() {
+            const configuration = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            };
+
+            peerConnection = new RTCPeerConnection(configuration);
+
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+                log(`Added ${track.kind} track`);
+            });
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({
+                        type: 'webrtc-ice-candidate',
+                        candidate: event.candidate,
+                        target: 'viewer'
+                    }));
+                }
+            };
+
+            peerConnection.onconnectionstatechange = () => {
+                log('Connection: ' + peerConnection.connectionState);
+            };
+
+            createOffer();
+        }
+
+        // Create WebRTC offer
+        async function createOffer() {
+            try {
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                
+                ws.send(JSON.stringify({
+                    type: 'webrtc-offer',
+                    offer: offer,
+                    target: 'viewer'
+                }));
+            } catch (error) {
+                log('Error creating offer: ' + error.message);
+            }
+        }
+
+        // Handle WebRTC answer
+        async function handleAnswer(answer) {
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                log('WebRTC established');
+            } catch (error) {
+                log('Error: ' + error.message);
+            }
+        }
+
+        // Handle ICE candidate
+        async function handleIceCandidate(candidate) {
+            try {
+                if (candidate) {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+            } catch (error) {
+                log('Error: ' + error.message);
+            }
+        }
+
+        // Handle incoming prompt
+        function handlePrompt(text, timestamp) {
+            promptCounter++;
+            promptCount.textContent = promptCounter;
+
+            const promptItem = document.createElement('div');
+            promptItem.className = 'prompt-item';
+            
+            const time = new Date(timestamp).toLocaleTimeString();
+            promptItem.innerHTML = `
+                <div class="prompt-time">${time}</div>
+                <div class="prompt-text">${text}</div>
+            `;
+
+            promptsContainer.insertBefore(promptItem, promptsContainer.firstChild);
+            log(`Prompt: "${text}"`);
+        }
+
+        // System log
+        function log(message) {
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            const time = new Date().toLocaleTimeString();
+            logEntry.textContent = `[${time}] ${message}`;
+            systemLog.insertBefore(logEntry, systemLog.firstChild);
+            console.log(message);
+        }
+
+        // Handle viewer's webcam offer
+        async function handleReturnFeedOffer(offer) {
+            try {
+                log('Setting up viewer webcam feed...');
+                
+                const configuration = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                };
+                
+                returnPeerConnection = new RTCPeerConnection(configuration);
+                
+                // Handle incoming viewer webcam stream
+                returnPeerConnection.ontrack = (event) => {
+                    log('Viewer webcam stream received');
+                    if (event.streams && event.streams[0]) {
+                        returnVideo.srcObject = event.streams[0];
+                        returnVideo.style.display = 'block';
+                        returnPlaceholder.style.display = 'none';
+                    }
+                };
+                
+                // Handle ICE candidates
+                returnPeerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        ws.send(JSON.stringify({
+                            type: 'return-feed-ice',
+                            candidate: event.candidate,
+                            target: 'viewer'
+                        }));
+                    }
+                };
+                
+                // Set remote description and create answer
+                await returnPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await returnPeerConnection.createAnswer();
+                await returnPeerConnection.setLocalDescription(answer);
+                
+                // Send answer back to viewer
+                ws.send(JSON.stringify({
+                    type: 'return-feed-answer',
+                    answer: answer,
+                    target: 'viewer'
+                }));
+                
+                log('Viewer webcam connection established');
+            } catch (error) {
+                log('Error setting up viewer webcam: ' + error.message);
+            }
+        }
+        
+        // Handle viewer's ICE candidate
+        async function handleReturnFeedIce(candidate) {
+            try {
+                if (candidate && returnPeerConnection) {
+                    await returnPeerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+            } catch (error) {
+                log('Error adding viewer ICE: ' + error.message);
+            }
+        }
+
+        // Update uptime
+        setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            uptime.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }, 1000);
+
+        // Event listeners
+        startBtn.addEventListener('click', startCamera);
+        screenShareBtn.addEventListener('click', startScreenShare);
+        stopBtn.addEventListener('click', stopCamera);
+
+        // Initialize
+        connectWebSocket();
+        loadCameras();
+
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                stream.getTracks().forEach(track => track.stop());
+                loadCameras();
+            })
+            .catch(err => log('Permission denied'));
+    </script>
+</body>
+</html>
