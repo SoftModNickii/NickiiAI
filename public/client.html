@@ -178,7 +178,8 @@
             height: 100%;
             object-fit: contain;
             display: none;
-            background: #000;
+            background: linear-gradient(135deg, #ffeef8 0%, #ffffff 100%);
+            border-radius: 28px;
         }
 
         /* Glitter particles overlay */
@@ -228,7 +229,7 @@
         .glitter:nth-child(11) { top: 10%; left: 55%; animation-delay: 0.3s; }
         .glitter:nth-child(12) { top: 45%; left: 90%; animation-delay: 1.7s; }
 
-        /* Holographic overlay effect */
+        /* Holographic overlay effect - subtle */
         .video-wrapper::before {
             content: '';
             position: absolute;
@@ -240,7 +241,7 @@
                 linear-gradient(
                     45deg,
                     transparent 30%,
-                    rgba(255, 107, 157, 0.03) 50%,
+                    rgba(255, 107, 157, 0.01) 50%,
                     transparent 70%
                 );
             background-size: 200% 200%;
@@ -254,24 +255,7 @@
             50% { background-position: 100% 50%; }
         }
 
-        /* Scanline effect for AI feel */
-        .video-wrapper::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 2px,
-                rgba(255, 107, 157, 0.02) 2px,
-                rgba(255, 107, 157, 0.02) 4px
-            );
-            pointer-events: none;
-            z-index: 1;
-        }
+        /* Remove scanline effect for cleaner look */
 
         #remoteVideo.active {
             display: block;
@@ -288,6 +272,7 @@
             align-items: center;
             justify-content: center;
             background: linear-gradient(135deg, #ffeef8 0%, #ffffff 100%);
+            z-index: 1;
         }
 
         .video-placeholder.hidden {
@@ -332,6 +317,37 @@
             font-size: 16px;
             font-weight: 600;
             color: #94a3b8;
+        }
+
+        .ai-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 5;
+            border: 1px solid rgba(255, 107, 157, 0.2);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .ai-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ff41;
+            box-shadow: 0 0 8px rgba(0, 255, 65, 0.6);
+            animation: pulse 2s infinite;
+        }
+
+        .ai-text {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
         }
 
         .interaction-panel {
@@ -474,13 +490,108 @@
                 grid-template-columns: 1fr 1fr;
             }
         }
+        /* Intro screen styles */
+        .intro-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #ffeef8 0%, #fff5f7 50%, #ffffff 100%);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 40px;
+            padding: 40px;
+            transition: opacity 0.5s ease-out;
+        }
+
+        .intro-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .intro-logo {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #ff6b9d 0%, #ff8fab 100%);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            font-weight: 800;
+            color: white;
+            box-shadow: 0 20px 60px rgba(255, 107, 157, 0.5);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .intro-content {
+            text-align: center;
+            max-width: 600px;
+        }
+
+        .intro-title {
+            font-size: 56px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 20px;
+            letter-spacing: -2px;
+        }
+
+        .intro-subtitle {
+            font-size: 20px;
+            color: #64748b;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .join-button {
+            background: linear-gradient(135deg, #ff6b9d 0%, #ff8fab 100%);
+            color: white;
+            border: none;
+            padding: 20px 50px;
+            font-size: 18px;
+            font-weight: 700;
+            border-radius: 16px;
+            cursor: pointer;
+            box-shadow: 0 10px 40px rgba(255, 107, 157, 0.4);
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .join-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 50px rgba(255, 107, 157, 0.5);
+        }
+
+        .join-button:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
+    <!-- Intro Screen -->
+    <div class="intro-screen" id="introScreen">
+        <div class="intro-logo">N</div>
+        <div class="intro-content">
+            <h1 class="intro-title">NICKII AI</h1>
+            <p class="intro-subtitle">
+                Experience the next generation of AI interaction. Connect with Nickii's advanced intelligence system for natural, intuitive conversations.
+            </p>
+            <button class="join-button" id="joinButton">Connect to Nickii AI</button>
+        </div>
+    </div>
+
     <div class="ambient-glow glow-1"></div>
     <div class="ambient-glow glow-2"></div>
 
-    <div class="container">
+    <div class="container" style="display: none;" id="mainContainer">
         <div class="header">
             <div class="brand">
                 <div class="logo-icon">N</div>
@@ -498,6 +609,10 @@
         <div class="main-content">
             <div class="video-section">
                 <div class="video-wrapper">
+                    <div class="ai-indicator">
+                        <div class="ai-dot"></div>
+                        <span class="ai-text">AI Processing</span>
+                    </div>
                     <video id="remoteVideo" autoplay playsinline></video>
                     <div class="video-placeholder" id="placeholder">
                         <div class="pulse-ring"></div>
@@ -522,7 +637,7 @@
 
             <div class="interaction-panel">
                 <div class="panel-card">
-                    <div class="panel-title">Neural Interface</div>
+                    <div class="panel-title">Interaction Interface</div>
                     <div class="prompt-input-wrapper">
                         <input 
                             type="text" 
@@ -570,7 +685,7 @@
                 </svg>
                 <div style="flex: 1;">
                     <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-                        To train Nickii's neural network, we capture video and audio from your device. This data helps improve AI responses.
+                        Your interaction helps improve Nickii's AI responses. Your privacy is protected.
                     </div>
                 </div>
                 <button onclick="document.getElementById('privacyNotice').style.display='none'" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 20px; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">×</button>
@@ -625,6 +740,21 @@
     </style>
 
     <script>
+        // Intro screen logic
+        const introScreen = document.getElementById('introScreen');
+        const mainContainer = document.getElementById('mainContainer');
+        const joinButton = document.getElementById('joinButton');
+
+        joinButton.addEventListener('click', () => {
+            introScreen.classList.add('hidden');
+            mainContainer.style.display = 'flex';
+            setTimeout(() => {
+                introScreen.style.display = 'none';
+                // Start connection after intro is dismissed
+                connectWebSocket();
+            }, 500);
+        });
+
         // WebSocket connection
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}`;
@@ -1053,8 +1183,8 @@
             }
         }
 
-        // Start connection
-        connectWebSocket();
+        // Don't auto-connect - wait for user to click join button
+        // Connection will be initiated from join button click handler
     </script>
 </body>
 </html>

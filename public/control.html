@@ -233,6 +233,13 @@
             border: 1px solid #00ff41;
             padding: 10px;
             text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .stat-box.active {
+            background: rgba(0, 255, 65, 0.15);
+            border-color: #00ff41;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
         }
 
         .stat-value {
@@ -296,13 +303,20 @@
 
                 <div class="controls">
                     <div class="control-group">
-                        <label>CAMERA SOURCE</label>
+                        <label>VIDEO SOURCE</label>
                         <select id="cameraSelect">
                             <option value="">Select Camera...</option>
                         </select>
                     </div>
 
-                    <button id="startBtn">START CAMERA</button>
+                    <div class="control-group">
+                        <label>AUDIO SOURCE (Microphone)</label>
+                        <select id="audioSelect">
+                            <option value="">Select Microphone...</option>
+                        </select>
+                    </div>
+
+                    <button id="startBtn">START CAMERA + MIC</button>
                     <button id="screenShareBtn">START SCREEN SHARE + AUDIO</button>
                     <button id="stopBtn" disabled>STOP STREAM</button>
                 </div>
@@ -327,9 +341,9 @@
                 <div class="panel-header">SYSTEM STATUS</div>
                 
                 <div class="stats">
-                    <div class="stat-box">
+                    <div class="stat-box" id="viewerBox">
                         <div class="stat-value" id="viewerCount">0</div>
-                        <div class="stat-label">VIEWERS</div>
+                        <div class="stat-label">VIEWERS ONLINE</div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-value" id="promptCount">0</div>
@@ -368,6 +382,7 @@
         const videoPlaceholder = document.getElementById('videoPlaceholder');
         const audioNotice = document.getElementById('audioNotice');
         const cameraSelect = document.getElementById('cameraSelect');
+        const audioSelect = document.getElementById('audioSelect');
         const startBtn = document.getElementById('startBtn');
         const screenShareBtn = document.getElementById('screenShareBtn');
         const stopBtn = document.getElementById('stopBtn');
@@ -377,6 +392,7 @@
         const uptime = document.getElementById('uptime');
         const returnVideo = document.getElementById('returnVideo');
         const returnPlaceholder = document.getElementById('returnPlaceholder');
+        const viewerBox = document.getElementById('viewerBox');
 
         let promptCounter = 0;
 
@@ -400,6 +416,17 @@
                     switch (data.type) {
                         case 'prompt':
                             handlePrompt(data.text, data.timestamp);
+                            break;
+                        
+                        case 'viewer-count':
+                            updateViewerCount(data.count);
+                            break;
+                        
+                        case 'request-offer':
+                            log('New viewer joined - creating new offer');
+                            if (peerConnection && peerConnection.connectionState === 'connected') {
+                                createOffer();
+                            }
                             break;
                         
                         case 'webrtc-answer':
@@ -441,11 +468,12 @@
             };
         }
 
-        // Load available cameras
+        // Load available cameras and microphones
         async function loadCameras() {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const cameras = devices.filter(device => device.kind === 'videoinput');
+                const microphones = devices.filter(device => device.kind === 'audioinput');
                 
                 cameraSelect.innerHTML = '<option value="">Select Camera...</option>';
                 cameras.forEach((camera, index) => {
@@ -455,26 +483,41 @@
                     cameraSelect.appendChild(option);
                 });
                 
-                log(`Found ${cameras.length} camera(s)`);
+                audioSelect.innerHTML = '<option value="">Select Microphone...</option>';
+                microphones.forEach((mic, index) => {
+                    const option = document.createElement('option');
+                    option.value = mic.deviceId;
+                    option.textContent = mic.label || `Microphone ${index + 1}`;
+                    audioSelect.appendChild(option);
+                });
+                
+                log(`Found ${cameras.length} camera(s) and ${microphones.length} microphone(s)`);
             } catch (error) {
-                log('Error loading cameras: ' + error.message);
+                log('Error loading devices: ' + error.message);
             }
         }
 
         // Start camera
         async function startCamera() {
             try {
-                const deviceId = cameraSelect.value;
-                if (!deviceId) {
+                const videoDeviceId = cameraSelect.value;
+                const audioDeviceId = audioSelect.value;
+                
+                if (!videoDeviceId) {
                     alert('Please select a camera first');
                     return;
                 }
+                
+                if (!audioDeviceId) {
+                    alert('Please select a microphone first');
+                    return;
+                }
 
-                log('Starting camera...');
+                log('Starting camera and microphone...');
 
                 const constraints = {
-                    video: { deviceId: { exact: deviceId } },
-                    audio: true
+                    video: { deviceId: { exact: videoDeviceId } },
+                    audio: { deviceId: { exact: audioDeviceId } }
                 };
 
                 localStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -486,20 +529,19 @@
                 if (audioTracks.length > 0) {
                     log(`Audio track: ${audioTracks[0].label}`);
                 } else {
-                    log('No audio - use Screen Share for audio');
-                    audioNotice.style.display = 'block';
+                    log('Warning: No audio track available');
                 }
 
                 startBtn.disabled = true;
                 screenShareBtn.disabled = true;
                 stopBtn.disabled = false;
 
-                log('Camera started successfully');
+                log('Camera and microphone started successfully');
                 
                 initializePeerConnection();
             } catch (error) {
                 log('Error: ' + error.message);
-                alert('Failed to start camera');
+                alert('Failed to start camera/microphone: ' + error.message);
             }
         }
 
@@ -666,6 +708,21 @@
             logEntry.textContent = `[${time}] ${message}`;
             systemLog.insertBefore(logEntry, systemLog.firstChild);
             console.log(message);
+        }
+
+        // Update viewer count
+        function updateViewerCount(count) {
+            const viewerCountEl = document.getElementById('viewerCount');
+            viewerCountEl.textContent = count;
+            
+            // Highlight viewer box when viewers are online
+            if (count > 0) {
+                viewerBox.classList.add('active');
+                log(`${count} viewer(s) online`);
+            } else {
+                viewerBox.classList.remove('active');
+                log('No viewers online');
+            }
         }
 
         // Handle viewer's webcam offer

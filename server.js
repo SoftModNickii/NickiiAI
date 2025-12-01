@@ -38,11 +38,32 @@ wss.on('connection', (ws, req) => {
         case 'register-viewer':
           clients.viewers.add(ws);
           console.log('Viewer registered. Total viewers:', clients.viewers.size);
+          
+          // Notify controller of viewer count update
+          if (clients.controller && clients.controller.readyState === WebSocket.OPEN) {
+            clients.controller.send(JSON.stringify({
+              type: 'viewer-count',
+              count: clients.viewers.size
+            }));
+            
+            // If controller is already streaming, request a new offer
+            console.log('Controller already connected - requesting new offer for viewer');
+            clients.controller.send(JSON.stringify({
+              type: 'request-offer',
+              newViewer: true
+            }));
+          }
           break;
 
         case 'register-controller':
           clients.controller = ws;
           console.log('Controller registered');
+          
+          // Send current viewer count to controller
+          ws.send(JSON.stringify({
+            type: 'viewer-count',
+            count: clients.viewers.size
+          }));
           break;
 
         case 'video-chunk':
@@ -97,11 +118,22 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
+    const wasViewer = clients.viewers.has(ws);
     clients.viewers.delete(ws);
+    
     if (clients.controller === ws) {
       clients.controller = null;
     }
+    
     console.log('Connection closed. Viewers:', clients.viewers.size);
+    
+    // Notify controller of viewer count update if a viewer disconnected
+    if (wasViewer && clients.controller && clients.controller.readyState === WebSocket.OPEN) {
+      clients.controller.send(JSON.stringify({
+        type: 'viewer-count',
+        count: clients.viewers.size
+      }));
+    }
   });
 
   ws.on('error', (error) => {
