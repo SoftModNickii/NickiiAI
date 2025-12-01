@@ -692,7 +692,22 @@
             <p class="intro-subtitle">
                 Experience the next generation of AI interaction. Connect with Nickii's advanced intelligence system for natural, intuitive conversations.
             </p>
-            <button class="join-button" id="joinButton">Connect to Nickii AI</button>
+            <div style="background: rgba(255, 107, 157, 0.1); border: 1px solid rgba(255, 107, 157, 0.3); border-radius: 12px; padding: 20px; margin: 20px 0; text-align: left;">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ff6b9d" stroke-width="2" style="flex-shrink: 0; margin-top: 2px;">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <div style="flex: 1;">
+                        <div style="font-size: 14px; font-weight: 700; color: #ff6b9d; margin-bottom: 8px;">Important Notice</div>
+                        <div style="font-size: 13px; color: #64748b; line-height: 1.6;">
+                            By clicking "Connect to Nickii AI" below, you agree that your webcam and microphone will be accessed and recorded for algorithmic training purposes. This data is used to improve AI performance and response quality.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="join-button" id="joinButton">I Agree - Connect to Nickii AI</button>
         </div>
     </div>
 
@@ -812,7 +827,7 @@
                 </svg>
                 <div style="flex: 1;">
                     <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-                        Your interaction helps improve Nickii's AI responses. Your privacy is protected.
+                        <strong style="color: #ff6b9d;">Recording Active:</strong> Your webcam and audio are being recorded and used for AI training and improvement purposes. See our Privacy Policy for details.
                     </div>
                 </div>
                 <button onclick="document.getElementById('privacyNotice').style.display='none'" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 20px; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">×</button>
