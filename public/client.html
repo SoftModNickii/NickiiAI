@@ -350,6 +350,114 @@
             color: #64748b;
         }
 
+        /* Volume Control Panel */
+        .volume-control-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 16px 20px;
+            border: 1px solid rgba(255, 107, 157, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            min-width: 280px;
+        }
+
+        .volume-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .volume-icon {
+            width: 20px;
+            height: 20px;
+            color: #ff6b9d;
+        }
+
+        .volume-label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ff6b9d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .volume-slider-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .volume-slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right, #e2e8f0 0%, #ff6b9d 100%);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff6b9d 0%, #ff8fab 100%);
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(255, 107, 157, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 12px rgba(255, 107, 157, 0.6);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff6b9d 0%, #ff8fab 100%);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 8px rgba(255, 107, 157, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .volume-slider::-moz-range-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 12px rgba(255, 107, 157, 0.6);
+        }
+
+        .volume-value {
+            min-width: 50px;
+            text-align: right;
+            font-size: 14px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ff6b9d 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .volume-boost-indicator {
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        .volume-boost-indicator.boosted {
+            color: #ff6b9d;
+            font-weight: 600;
+        }
+
         .interaction-panel {
             flex: 1;
             display: flex;
@@ -614,6 +722,25 @@
                         <span class="ai-text">AI Processing</span>
                     </div>
                     <video id="remoteVideo" autoplay playsinline></video>
+                    
+                    <!-- Volume Control Panel -->
+                    <div class="volume-control-panel">
+                        <div class="volume-header">
+                            <svg class="volume-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+                                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                            </svg>
+                            <span class="volume-label">Audio Level</span>
+                        </div>
+                        <div class="volume-slider-container">
+                            <input type="range" class="volume-slider" id="volumeSlider" min="0" max="300" value="100" step="1">
+                            <div class="volume-value">
+                                <span id="volumePercentage">100</span>%
+                            </div>
+                        </div>
+                        <div class="volume-boost-indicator" id="boostIndicator">Standard Volume</div>
+                    </div>
                     <div class="video-placeholder" id="placeholder">
                         <div class="pulse-ring"></div>
                         <div class="placeholder-text">Connecting to Nickii's neural network...</div>
@@ -763,6 +890,9 @@
         let connectionStartTime;
         let viewerStream; // For sending viewer's webcam back
         let returnPeerConnection; // Separate connection for return feed
+        let audioContext;
+        let gainNode;
+        let sourceNode;
         
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
@@ -858,12 +988,19 @@
                     remoteVideo.classList.add('active');
                     placeholder.classList.add('hidden');
                     
+                    // Setup audio amplification
+                    setupAudioAmplification(event.streams[0]);
+                    
                     // Auto-play with audio (browsers may block this)
                     remoteVideo.play().catch(e => {
                         console.log('Autoplay blocked, user interaction needed');
                         // Click anywhere on page to start
                         document.addEventListener('click', () => {
                             remoteVideo.play();
+                            // Resume audio context if suspended
+                            if (audioContext && audioContext.state === 'suspended') {
+                                audioContext.resume();
+                            }
                         }, { once: true });
                     });
                 }
@@ -945,6 +1082,63 @@
                 }));
                 promptInput.value = '';
                 console.log('Prompt sent:', text);
+            }
+        }
+
+        // Volume control
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumePercentage = document.getElementById('volumePercentage');
+        const boostIndicator = document.getElementById('boostIndicator');
+
+        volumeSlider.addEventListener('input', (e) => {
+            const volume = e.target.value;
+            volumePercentage.textContent = volume;
+            
+            // Update boost indicator
+            if (volume < 100) {
+                boostIndicator.textContent = 'Reduced Volume';
+                boostIndicator.classList.remove('boosted');
+            } else if (volume === '100') {
+                boostIndicator.textContent = 'Standard Volume';
+                boostIndicator.classList.remove('boosted');
+            } else {
+                boostIndicator.textContent = `Boosted +${volume - 100}%`;
+                boostIndicator.classList.add('boosted');
+            }
+            
+            // Apply volume/gain
+            if (gainNode) {
+                gainNode.gain.value = volume / 100;
+            }
+        });
+
+        // Setup audio amplification
+        function setupAudioAmplification(stream) {
+            try {
+                // Create audio context if not exists
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                // Create gain node
+                if (!gainNode) {
+                    gainNode = audioContext.createGain();
+                    gainNode.connect(audioContext.destination);
+                }
+                
+                // Connect stream to gain node
+                if (sourceNode) {
+                    sourceNode.disconnect();
+                }
+                sourceNode = audioContext.createMediaStreamSource(stream);
+                sourceNode.connect(gainNode);
+                
+                // Set initial volume
+                gainNode.gain.value = volumeSlider.value / 100;
+                
+                console.log('Audio amplification enabled');
+            } catch (error) {
+                console.error('Error setting up audio amplification:', error);
             }
         }
 
