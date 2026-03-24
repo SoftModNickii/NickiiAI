@@ -364,6 +364,18 @@
             z-index: 10;
             min-width: 280px;
         }
+        
+        @media (max-width: 768px) {
+            .volume-control-panel {
+                min-width: 200px;
+                padding: 12px 16px;
+                bottom: 10px;
+                left: 10px;
+                right: 10px;
+                position: relative;
+                margin-bottom: 20px;
+            }
+        }
 
         .volume-header {
             display: flex;
@@ -482,6 +494,13 @@
             letter-spacing: 1.2px;
             margin-bottom: 18px;
         }
+        
+        /* Mobile-specific styles */
+        @media (max-width: 768px) {
+            .panel-title {
+                display: none; /* Hide "Interaction Interface" on mobile */
+            }
+        }
 
         .prompt-input-wrapper {
             position: relative;
@@ -578,6 +597,7 @@
         @media (max-width: 1200px) {
             .main-content {
                 flex-direction: column;
+                gap: 20px;
             }
             
             .info-cards {
@@ -587,15 +607,74 @@
 
         @media (max-width: 768px) {
             .container {
-                padding: 20px;
+                padding: 15px;
+            }
+            
+            .header {
+                margin-bottom: 20px;
             }
             
             .brand-text h1 {
                 font-size: 28px;
             }
             
+            .video-section {
+                order: -1; /* Video first on mobile */
+            }
+            
+            .video-wrapper {
+                border-radius: 16px;
+                margin-bottom: 20px;
+            }
+            
+            #remoteVideo {
+                border-radius: 16px;
+            }
+            
+            .interaction-panel {
+                gap: 15px;
+            }
+            
+            .panel-card {
+                padding: 20px;
+                border-radius: 16px;
+            }
+            
             .info-cards {
                 grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                margin-top: 15px;
+            }
+            
+            .info-card {
+                padding: 12px;
+            }
+            
+            .info-value {
+                font-size: 18px;
+            }
+            
+            .info-label {
+                font-size: 10px;
+            }
+            
+            /* Make buttons thumb-friendly */
+            .send-button {
+                width: 48px;
+                height: 48px;
+                min-width: 44px;
+                min-height: 44px;
+            }
+            
+            .join-button {
+                padding: 18px 40px;
+                font-size: 16px;
+                min-height: 44px;
+            }
+            
+            #promptInput {
+                padding: 16px 60px 16px 18px;
+                font-size: 16px; /* Prevent zoom on iOS */
             }
         }
         /* Intro screen styles */
@@ -702,12 +781,12 @@
                     <div style="flex: 1;">
                         <div style="font-size: 14px; font-weight: 700; color: #ff6b9d; margin-bottom: 8px;">Important Notice</div>
                         <div style="font-size: 13px; color: #64748b; line-height: 1.6;">
-                            By clicking "Connect to Nickii AI" below, you agree that your webcam and microphone will be accessed and recorded for algorithmic training purposes. This data is used to improve AI performance and response quality.
+                            By clicking "Connect to Nickii AI" below, you can start watching the AI stream. Camera and microphone access is optional - you can enjoy the show without sharing your own video/audio.
                         </div>
                     </div>
                 </div>
             </div>
-            <button class="join-button" id="joinButton">I Agree - Connect to Nickii AI</button>
+            <button class="join-button" id="joinButton">Connect to Nickii AI</button>
         </div>
     </div>
 
@@ -737,6 +816,8 @@
                         <span class="ai-text">AI Processing</span>
                     </div>
                     <video id="remoteVideo" autoplay playsinline></video>
+                    <!-- Separate audio element for mobile Safari audio fix -->
+                    <audio id="remoteAudio" autoplay playsinline style="display: none;"></audio>
                     
                     <!-- Volume Control Panel -->
                     <div class="volume-control-panel">
@@ -827,7 +908,7 @@
                 </svg>
                 <div style="flex: 1;">
                     <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-                        <strong style="color: #ff6b9d;">Recording Active:</strong> Your webcam and audio are being recorded and used for AI training and improvement purposes. See our Privacy Policy for details.
+                        <strong style="color: #ff6b9d;">Optional Sharing:</strong> If you granted camera/microphone access, your feed may be visible to the presenter for interactive purposes. Camera access is entirely optional.
                     </div>
                 </div>
                 <button onclick="document.getElementById('privacyNotice').style.display='none'" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 20px; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">×</button>
@@ -912,12 +993,15 @@
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         const remoteVideo = document.getElementById('remoteVideo');
+        const remoteAudio = document.getElementById('remoteAudio');
         const placeholder = document.getElementById('placeholder');
         const promptInput = document.getElementById('promptInput');
         const sendButton = document.getElementById('sendButton');
         const connectionStatus = document.getElementById('connectionStatus');
         const seedDisplay = document.getElementById('seed');
         const tokensDisplay = document.getElementById('tokens');
+        let audioEnabled = false;
+        let userInteracted = false;
 
         // Initialize WebSocket
         function connectWebSocket() {
@@ -999,25 +1083,47 @@
             peerConnection.ontrack = (event) => {
                 console.log('Received remote track:', event.track.kind);
                 if (event.streams && event.streams[0]) {
-                    remoteVideo.srcObject = event.streams[0];
+                    const stream = event.streams[0];
+                    
+                    // Set video stream
+                    remoteVideo.srcObject = stream;
                     remoteVideo.classList.add('active');
                     placeholder.classList.add('hidden');
                     
-                    // Setup audio amplification
-                    setupAudioAmplification(event.streams[0]);
+                    // Mobile Safari audio fix - use separate audio element
+                    const audioTracks = stream.getAudioTracks();
+                    if (audioTracks.length > 0) {
+                        // Create audio-only stream for mobile Safari
+                        const audioStream = new MediaStream(audioTracks);
+                        remoteAudio.srcObject = audioStream;
+                        remoteAudio.muted = false;
+                        remoteAudio.volume = 1.0;
+                    }
                     
-                    // Auto-play with audio (browsers may block this)
+                    // Setup audio amplification
+                    setupAudioAmplification(stream);
+                    
+                    // Auto-play video (muted by default for autoplay compatibility)
                     remoteVideo.play().catch(e => {
-                        console.log('Autoplay blocked, user interaction needed');
-                        // Click anywhere on page to start
-                        document.addEventListener('click', () => {
-                            remoteVideo.play();
-                            // Resume audio context if suspended
+                        console.log('Video autoplay blocked');
+                    });
+                    
+                    // Enable audio on first user interaction
+                    if (!userInteracted) {
+                        const enableAudio = () => {
+                            userInteracted = true;
+                            remoteAudio.play().catch(e => console.log('Audio play failed:', e));
                             if (audioContext && audioContext.state === 'suspended') {
                                 audioContext.resume();
                             }
-                        }, { once: true });
-                    });
+                            document.removeEventListener('click', enableAudio);
+                            document.removeEventListener('touchstart', enableAudio);
+                        };
+                        document.addEventListener('click', enableAudio);
+                        document.addEventListener('touchstart', enableAudio);
+                    } else {
+                        remoteAudio.play().catch(e => console.log('Audio play failed:', e));
+                    }
                 }
             };
 
@@ -1313,18 +1419,26 @@
             }
         });
 
-        // Start viewer's webcam to send back to controller
+        // Start viewer's webcam to send back to controller (OPTIONAL)
         async function startViewerWebcam() {
             try {
-                console.log('Starting viewer webcam for return feed...');
+                console.log('Attempting to start viewer webcam for return feed (optional)...');
                 
-                // Get viewer's webcam
+                // Try to get viewer's webcam - but don't fail if not available
                 viewerStream = await navigator.mediaDevices.getUserMedia({ 
                     video: true, 
                     audio: true 
+                }).catch(error => {
+                    console.log('Camera/microphone not available or permission denied - continuing without:', error.message);
+                    return null;
                 });
                 
-                console.log('Viewer webcam started');
+                if (!viewerStream) {
+                    console.log('Viewer will watch without sharing camera - this is perfectly fine!');
+                    return; // Exit gracefully without camera
+                }
+                
+                console.log('Viewer webcam started (optional feature)');
                 
                 // Create separate peer connection for return feed
                 const configuration = {
@@ -1366,8 +1480,8 @@
                 }));
                 
             } catch (error) {
-                console.log('Viewer webcam not available:', error.message);
-                // This is okay - viewer might not have a webcam
+                console.log('Viewer webcam setup failed (this is okay):', error.message);
+                // This is completely fine - viewers can watch without sharing their webcam
             }
         }
         

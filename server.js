@@ -95,20 +95,23 @@ wss.on('connection', (ws, req) => {
         case 'return-feed-offer':
         case 'return-feed-answer':
         case 'return-feed-ice':
-          // Forward WebRTC signaling messages
-          console.log('Forwarding WebRTC message:', data.type, 'to:', data.target);
+          // Forward WebRTC signaling messages to support multiple viewers
+          console.log('Forwarding WebRTC message:', data.type, 'to:', data.target, '| Total viewers:', clients.viewers.size);
           
-          // FIXED: Send the parsed data as JSON, not the raw message
           if (data.target === 'controller' && clients.controller) {
             if (clients.controller.readyState === WebSocket.OPEN) {
               clients.controller.send(JSON.stringify(data));
             }
           } else if (data.target === 'viewer') {
+            // Broadcast to ALL viewers (supports multiple concurrent viewers)
+            let sentCount = 0;
             clients.viewers.forEach(viewer => {
               if (viewer.readyState === WebSocket.OPEN) {
                 viewer.send(JSON.stringify(data));
+                sentCount++;
               }
             });
+            console.log(`Broadcasted ${data.type} to ${sentCount} active viewers`);
           }
           break;
       }

@@ -1,13 +1,16 @@
 {
   "name": "nickii-ai",
   "version": "1.0.0",
-  "description": "NICKII AI - Professional video streaming and prompt display system",
+  "description": "NICKII AI - Professional WebRTC streaming system with real-time viewer interaction and AI aesthetic",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"
   },
-  "keywords": ["webrtc", "streaming", "obs", "websocket"],
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "keywords": ["webrtc", "streaming", "obs", "websocket", "ai", "realtime"],
   "author": "",
   "license": "ISC",
   "dependencies": {
