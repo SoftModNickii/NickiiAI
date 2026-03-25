@@ -14,7 +14,9 @@ app.get('/control', (req, res) => res.sendFile(path.join(__dirname, 'public', 'c
  
 const clients = {
   viewers: new Set(),
-  controller: null
+  controller: null,
+  connectionCount: 0, // Track connections for rate limiting
+  maxConnections: 100 // Prevent overwhelming the server
 };
  
 // ── THE FIX ──
@@ -23,8 +25,16 @@ const clients = {
 let cachedOffer = null;
 let cachedIceCandidates = [];
  
-wss.on('connection', (ws) => {
-  console.log('New connection');
+wss.on('connection', (ws, req) => {
+  // Basic rate limiting
+  if (clients.connectionCount >= clients.maxConnections) {
+    console.log('Connection limit reached, rejecting connection');
+    ws.close(1013, 'Server overloaded');
+    return;
+  }
+  
+  clients.connectionCount++;
+  console.log('New connection. Total connections:', clients.connectionCount);
  
   ws.on('message', (message) => {
     try {
@@ -106,6 +116,7 @@ wss.on('connection', (ws) => {
   });
  
   ws.on('close', () => {
+    clients.connectionCount--;
     const wasViewer = clients.viewers.has(ws);
     clients.viewers.delete(ws);
  
@@ -118,7 +129,7 @@ wss.on('connection', (ws) => {
     }
  
     if (wasViewer) {
-      console.log('Viewer left. Remaining:', clients.viewers.size);
+      console.log('Viewer left. Remaining viewers:', clients.viewers.size, 'Total connections:', clients.connectionCount);
       sendToController({ type: 'viewer-count', count: clients.viewers.size });
     }
   });

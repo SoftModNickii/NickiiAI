@@ -19,22 +19,22 @@
             position: fixed; width: 600px; height: 600px;
             border-radius: 50%; pointer-events: none; z-index: 0; opacity: 0.25;
         }
-        .glow-1 { top:-200px; right:-200px; background: radial-gradient(circle, #ff6b9d 0%, transparent 70%); animation: drift 20s ease-in-out infinite; }
-        .glow-2 { bottom:-200px; left:-200px; background: radial-gradient(circle, #c084fc 0%, transparent 70%); animation: drift 25s ease-in-out infinite reverse; }
-        @keyframes drift { 0%,100% { transform:translate(0,0); } 50% { transform:translate(40px,40px); } }
+        .glow-1 { top:-200px; right:-200px; background: radial-gradient(circle, #ff6b9d 0%, transparent 70%); animation: drift 30s ease-in-out infinite; }
+        .glow-2 { bottom:-200px; left:-200px; background: radial-gradient(circle, #c084fc 0%, transparent 70%); animation: drift 40s ease-in-out infinite reverse; }
+        @keyframes drift { 0%,100% { transform:translate(0,0); } 50% { transform:translate(20px,20px); } }
 
         .glitter { position:absolute; width:4px; height:4px; border-radius:50%; pointer-events:none;
             background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,182,193,0.6) 50%, transparent 100%);
-            animation: sparkle 3s infinite; opacity:0; }
+            animation: sparkle 6s infinite; opacity:0; }
         @keyframes sparkle { 0%,100%{opacity:0;transform:scale(0) rotate(0deg);} 50%{opacity:1;transform:scale(1.5) rotate(180deg);} }
         .glitter:nth-child(1){top:20%;left:10%;animation-delay:0s}
-        .glitter:nth-child(2){top:40%;left:80%;animation-delay:.5s}
-        .glitter:nth-child(3){top:60%;left:30%;animation-delay:1s}
-        .glitter:nth-child(4){top:15%;left:70%;animation-delay:1.5s}
-        .glitter:nth-child(5){top:80%;left:50%;animation-delay:2s}
-        .glitter:nth-child(6){top:35%;left:15%;animation-delay:2.5s}
-        .glitter:nth-child(7){top:70%;left:85%;animation-delay:.7s}
-        .glitter:nth-child(8){top:25%;left:45%;animation-delay:1.2s}
+        .glitter:nth-child(2){top:40%;left:80%;animation-delay:1s}
+        .glitter:nth-child(3){top:60%;left:30%;animation-delay:2s}
+        .glitter:nth-child(4){top:15%;left:70%;animation-delay:3s}
+        .glitter:nth-child(5){top:80%;left:50%;animation-delay:4s}
+        .glitter:nth-child(6){top:35%;left:15%;animation-delay:5s}
+        /* Disable extra glitter for better performance */
+        .glitter:nth-child(n+7){display:none;}
 
         /* ── INTRO ── */
         #intro {
@@ -395,7 +395,8 @@ function connectWebSocket() {
         statusText.textContent = 'Connected';
         ws.send(JSON.stringify({ type: 'register-viewer' }));
         initPeerConnection();
-        startViewerWebcam();
+        // Delay webcam initialization to reduce initial load
+        setTimeout(() => startViewerWebcam(), 2000);
     };
 
     ws.onmessage = (e) => {
@@ -411,7 +412,8 @@ function connectWebSocket() {
     ws.onclose = () => {
         statusDot.classList.add('off');
         statusText.textContent = 'Reconnecting...';
-        setTimeout(connectWebSocket, 3000);
+        // Increase reconnect delay to reduce resource usage
+        setTimeout(connectWebSocket, 5000);
     };
 }
 
@@ -470,21 +472,46 @@ async function handleIce(candidate) {
     }
 }
 
-// ── Audio gain ──
+// ── Audio gain (optimized) ──
 function setupGain(stream) {
     try {
-        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        if (!gainNode) { gainNode = audioContext.createGain(); gainNode.connect(audioContext.destination); }
-        if (sourceNode) sourceNode.disconnect();
+        // Only create new context if needed
+        if (!audioContext || audioContext.state === 'closed') {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        // Resume context if suspended
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+        
+        if (!gainNode) { 
+            gainNode = audioContext.createGain(); 
+            gainNode.connect(audioContext.destination); 
+        }
+        
+        // Clean up previous connections
+        if (sourceNode) {
+            sourceNode.disconnect();
+            sourceNode = null;
+        }
+        
         sourceNode = audioContext.createMediaStreamSource(stream);
         sourceNode.connect(gainNode);
         gainNode.gain.value = volSlider.value / 100;
-    } catch(e) {}
+    } catch(e) {
+        console.warn('Audio setup failed:', e);
+    }
 }
 
+// Throttle volume slider updates
+let volumeUpdateTimeout;
 volSlider.addEventListener('input', () => {
     volPct.textContent = volSlider.value;
-    if (gainNode) gainNode.gain.value = volSlider.value / 100;
+    clearTimeout(volumeUpdateTimeout);
+    volumeUpdateTimeout = setTimeout(() => {
+        if (gainNode) gainNode.gain.value = volSlider.value / 100;
+    }, 50);
 });
 
 // ── Viewer webcam (optional return feed) ──
@@ -535,13 +562,14 @@ function sendPrompt() {
 sendBtn.addEventListener('click', sendPrompt);
 promptInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendPrompt(); });
 
-// ── Animated neural params ──
+// ── Animated neural params (reduced frequency) ──
 setInterval(() => {
     if (ws && ws.readyState === WebSocket.OPEN) {
+        // Only update when connected and reduce frequency
         seedEl.textContent   = (Math.floor(Math.random() * 9000) + 1000);
         tokensEl.textContent = (Math.floor(Math.random() * 512) + 1536);
     }
-}, 3000);
+}, 8000); // Reduced from 3s to 8s
 
 // ── Modals ──
 const modals = {
