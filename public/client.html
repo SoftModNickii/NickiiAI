@@ -372,12 +372,10 @@ let audioContext, gainNode, sourceNode;
 // ── THE KEY AUDIO FIX ──
 // We create and "unlock" the audio element right inside the join button click.
 // Safari remembers this gesture so audio plays automatically when the stream arrives.
-const audioEl = new Audio();
-audioEl.autoplay = true;
 
 joinBtn.addEventListener('click', () => {
     // Unlock audio in same gesture — Safari requires this
-    audioEl.play().catch(() => {});
+    // (Audio element removed - using video element directly now)
 
     intro.classList.add('out');
     setTimeout(() => {
@@ -439,12 +437,10 @@ function initPeerConnection() {
         }
 
         if (e.track.kind === 'audio') {
-            // Audio: separate element, already unlocked by join button tap
-            const audioStream = new MediaStream([e.track]);
-            audioEl.srcObject = audioStream;
-            audioEl.muted = false;
-            audioEl.play().catch(err => console.log('Audio play:', err));
-            setupGain(audioStream);
+            e.track.enabled = true;
+            remoteVideo.muted = false;
+            remoteVideo.srcObject = e.streams[0];
+            remoteVideo.play().catch(() => {});
         }
     };
 
