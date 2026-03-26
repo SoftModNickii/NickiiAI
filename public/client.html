@@ -182,16 +182,22 @@
             align-items: center; justify-content: center;
             background: linear-gradient(135deg, #f0ebff, #faf9ff);
         }
-        .video-placeholder.off { display: none; }
+        .video-placeholder.off { 
+            opacity: 0; 
+            pointer-events: none; 
+            transition: opacity 0.8s ease-out;
+        }
         .pulse-ring {
             width: 80px; height: 80px;
             border-radius: 16px;
             border: 3px solid #8a6dff;
-            animation: purplePulse 2s ease-out infinite; position: relative;
+            animation: purplePulse 2s ease-out infinite; 
+            position: relative;
         }
         @keyframes purplePulse { 
-            0%{transform:translateZ(0) scale(0.95);opacity:1;} 
-            100%{transform:translateZ(0) scale(1.6);opacity:0;} 
+            0%{transform:translateZ(0) scale(0.95);opacity:1;box-shadow: 0 0 0 rgba(138,109,255,0.7);} 
+            50%{transform:translateZ(0) scale(1.2);opacity:0.8;box-shadow: 0 0 20px rgba(138,109,255,0.4);} 
+            100%{transform:translateZ(0) scale(1.6);opacity:0;box-shadow: 0 0 40px rgba(138,109,255,0.1);} 
         }
         .pulse-ring::before {
             content: ''; position: absolute; inset: 0; margin: auto;
@@ -320,16 +326,25 @@
         #privnotice strong { color: #ff6b9d; }
         #privnotice button { background:none; border:none; color:#94a3b8; cursor:pointer; font-size:20px; flex-shrink:0; }
 
-        /* Audio notice */
-        .audio-notice {
-            position: absolute; bottom: 20px; left: 50%; 
-            transform: translateX(-50%); z-index: 10;
-            background: rgba(255,255,255,0.95); backdrop-filter: blur(20px);
-            color: #64748b; padding: 12px 20px;
-            font-size: 14px; font-weight: 600; border-radius: 20px;
-            border: 1px solid rgba(255,107,157,0.2);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-            text-align: center;
+        /* Controls overlay */
+        .controls-overlay {
+            position: absolute; 
+            bottom: 0; left: 0; right: 0; 
+            height: 48px; /* Height to cover video controls */
+            background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.4));
+            backdrop-filter: blur(10px);
+            z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+            /* Leave space for mute button on the left */
+            padding-right: 80px;
+            border-radius: 0 0 24px 24px;
+        }
+        
+        .audio-message {
+            color: white; 
+            font-size: 14px; font-weight: 600; 
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            user-select: none;
         }
 
         @media (max-width: 768px) {
@@ -342,6 +357,15 @@
                 margin: 0 auto; 
             }
             .brand-name { font-size: 22px; }
+            
+            /* Scale controls overlay on mobile */
+            .controls-overlay {
+                height: 40px; /* Slightly smaller on mobile */
+                padding-right: 60px; /* Less space for mute button */
+            }
+            .audio-message {
+                font-size: 12px; /* Smaller text on mobile */
+            }
         }
     </style>
 </head>
@@ -383,8 +407,8 @@
                     <div class="pulse-ring"></div>
                     <p class="ph-text">Connecting to Nickii's neural network...</p>
                 </div>
-                <div class="audio-notice">
-                    <span>Enable sound to listen to NickiiAI</span>
+                <div class="controls-overlay">
+                    <span class="audio-message">Enable sound to listen to NickiiAI</span>
                 </div>
                 <div class="glitter-wrap">
                     <div class="g"></div><div class="g"></div><div class="g"></div>
