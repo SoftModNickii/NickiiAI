@@ -335,7 +335,38 @@
             transform: translateY(-2px);
             box-shadow: 0 12px 32px rgba(138,109,255,0.5);
         }
-        .audio-control:active { transform: scale(0.97); }
+        /* Connect overlay button */
+        .connect-overlay {
+            position: absolute; inset: 0; z-index: 10;
+            background: rgba(138,109,255,0.15); backdrop-filter: blur(20px);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 20px; border-radius: 24px;
+            transition: opacity 0.3s ease;
+        }
+        .connect-overlay.hidden { 
+          opacity: 0; 
+          pointer-events: none; 
+          transition: opacity 0.3s ease;
+        }
+        .btn-connect-now {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white; border: none; padding: 16px 32px;
+            font-size: 16px; font-weight: 700; border-radius: 12px;
+            cursor: pointer; font-family: inherit;
+            box-shadow: 0 8px 24px rgba(16,185,129,0.4);
+            transition: transform 0.15s, box-shadow 0.15s;
+            min-height: 52px;
+        }
+        .btn-connect-now:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(16,185,129,0.5);
+        }
+        .btn-connect-now:active { transform: scale(0.97); }
+        .connect-text {
+            font-size: 14px; color: #64748b; text-align: center;
+            max-width: 280px; line-height: 1.6;
+        }
 
         @media (max-width: 768px) {
             #app { padding: 16px; overflow-y: auto; height: auto; }
@@ -387,6 +418,10 @@
                 <div class="video-placeholder" id="ph">
                     <div class="pulse-ring"></div>
                     <p class="ph-text">Connecting to Nickii's neural network...</p>
+                </div>
+                <div class="connect-overlay" id="connectOverlay">
+                    <button class="btn-connect-now" id="connectNowBtn">🎥 Connect Now</button>
+                    <p class="connect-text">Click to connect with Nickii AI and enable audio/video features</p>
                 </div>
                 <div class="glitter-wrap">
                     <div class="g"></div><div class="g"></div><div class="g"></div>
@@ -459,7 +494,7 @@
 <script>
 // ── Global variables accessible everywhere ──
 let ws, pc, returnPc, viewerStream;
-let aud, vid, sdot, stext, ph;
+let aud, vid, sdot, stext, ph, connectOverlay;
 let actx, gain, src;
 let audioEnabled = false;
 
@@ -471,24 +506,32 @@ document.addEventListener('DOMContentLoaded', function() {
     const intro = document.getElementById('intro');
     const app = document.getElementById('app');
     const joinBtn = document.getElementById('joinBtn');
+    const connectNowBtn = document.getElementById('connectNowBtn');
     
     vid = document.getElementById('remoteVideo');
     sdot = document.getElementById('sdot');
     stext = document.getElementById('stext');
     ph = document.getElementById('ph');
+    connectOverlay = document.getElementById('connectOverlay');
     aud = new Audio();
     
-    console.log('Elements found:', { intro: !!intro, app: !!app, joinBtn: !!joinBtn, vid: !!vid });
+    console.log('Elements found:', { 
+        intro: !!intro, 
+        app: !!app, 
+        joinBtn: !!joinBtn, 
+        connectNowBtn: !!connectNowBtn,
+        vid: !!vid 
+    });
     
     if (!joinBtn) {
         console.error('Join button not found!');
         return;
     }
     
+    // First button: Just show the app (no connection yet)
     joinBtn.onclick = function() {
-        console.log('Join button clicked');
+        console.log('Join button clicked - showing app');
         
-        // Smooth transition
         intro.style.transition = 'opacity 0.5s ease';
         intro.style.opacity = '0';
         
@@ -496,21 +539,37 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Transitioning to main app');
             intro.style.display = 'none';
             app.style.display = 'flex';
-            console.log('App should now be visible');
+            console.log('App is now visible - ready for connection');
             
-            // Initialize everything after UI is ready
-            setTimeout(initializeApp, 100);
+            // Set up handlers but don't connect yet
+            setupHandlers();
         }, 500);
     };
+    
+    // Second button: Actually connect
+    if (connectNowBtn) {
+        connectNowBtn.onclick = function() {
+            console.log('Connect Now button clicked - starting actual connection');
+            
+            // Hide the connect overlay
+            if (connectOverlay) connectOverlay.classList.add('hidden');
+            
+            // Start the actual connection process
+            initializeConnection();
+        };
+    }
 });
 
-function initializeApp() {
-    console.log('Initializing app with elements:', { vid: !!vid, aud: !!aud, sdot: !!sdot });
-    
+function setupHandlers() {
+    console.log('Setting up handlers...');
     setupAudioControl();
     setupVolumeControl();
     setupPromptHandlers();
     setupAnimations();
+}
+
+function initializeConnection() {
+    console.log('Initializing connection...');
     connect();
 }
 
