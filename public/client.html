@@ -136,15 +136,33 @@
         .video-wrap {
             position: relative; flex: 1;
             background: rgba(255,255,255,0.5); backdrop-filter: blur(30px);
-            border-radius: 24px; overflow: hidden;
+            border-radius: 50%; overflow: hidden;
             box-shadow: 0 24px 64px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.6);
+            aspect-ratio: 1/1; max-width: 500px; margin: 0 auto;
         }
         #remoteVideo {
             width: 100%; height: 100%;
-            object-fit: contain; display: none;
-            background: #000; border-radius: 24px;
+            object-fit: cover; display: none;
+            background: #000;
         }
-        #remoteVideo.on { display: block; }
+        #remoteVideo.on { 
+            display: block;
+            animation: videoShimmer 6s ease-in-out infinite;
+        }
+        @keyframes videoShimmer {
+            0%, 100% { 
+                filter: brightness(1) contrast(1);
+                box-shadow: 0 0 20px rgba(255,107,157,0.2);
+            }
+            33% { 
+                filter: brightness(1.05) contrast(1.02);
+                box-shadow: 0 0 30px rgba(255,107,157,0.4), inset 0 0 30px rgba(255,255,255,0.05);
+            }
+            66% { 
+                filter: brightness(1.02) contrast(1.01);
+                box-shadow: 0 0 25px rgba(192,132,252,0.3);
+            }
+        }
         .video-placeholder {
             position: absolute; inset: 0;
             display: flex; flex-direction: column;
@@ -284,7 +302,12 @@
         @media (max-width: 768px) {
             #app { padding: 16px; overflow-y: auto; height: auto; }
             .main { flex-direction: column; }
-            .video-wrap { aspect-ratio: 16/9; flex: none; }
+            .video-wrap { 
+                aspect-ratio: 1/1; 
+                flex: none; 
+                max-width: 300px; 
+                margin: 0 auto; 
+            }
             .brand-name { font-size: 22px; }
         }
     </style>
