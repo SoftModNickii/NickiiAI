@@ -16,9 +16,9 @@
         .conn-dot.live { background:#00ff41; box-shadow:0 0 8px #00ff41; animation:blink 2s infinite; }
         @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
 
-        .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+        .grid { display:grid; grid-template-columns:1fr 1.5fr; gap:16px; margin-bottom:16px; }
         .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px; }
-        .grid-prompts { display:grid; grid-template-columns:1fr 2fr; gap:16px; margin-bottom:16px; }
+        .grid-prompts { display:grid; grid-template-columns:1.5fr 1fr; gap:16px; margin-bottom:16px; }
 
         .panel { border:1px solid #00ff41; background:rgba(0,255,65,0.03); padding:16px; }
         .panel-title { font-size:11px; color:#00aa2e; letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; border-bottom:1px solid rgba(0,255,65,0.2); padding-bottom:8px; }
@@ -34,7 +34,7 @@
             position:relative;
             width:100%; aspect-ratio:1/1;
             background:rgba(138,109,255,0.1); border:2px solid #8a6dff;
-            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+            border-radius: 16px; overflow: hidden;
             box-shadow: 
                 0 0 20px rgba(138,109,255,0.3),
                 0 0 40px rgba(138,109,255,0.1),
@@ -72,7 +72,6 @@
             position:absolute; inset:0;
             display:flex; align-items:center; justify-content:center;
             font-size:12px; color:#8a6dff; letter-spacing:1px;
-            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
             background: linear-gradient(135deg, rgba(138,109,255,0.05), rgba(183,148,255,0.05));
         }
         .vid-placeholder.off { display:none; }
@@ -105,7 +104,7 @@
         .log::-webkit-scrollbar-thumb { background:#00ff41; }
 
         /* Prompts */
-        .prompts { height:180px; overflow-y:auto; font-size:12px; line-height:1.9; color:#00ff41; }
+        .prompts { height:220px; overflow-y:auto; font-size:12px; line-height:1.9; color:#00ff41; }
         .prompt-item { border-bottom:1px solid rgba(0,255,65,0.1); padding:6px 0; }
         .prompt-time { color:#00aa2e; font-size:10px; margin-right:8px; }
         .prompts::-webkit-scrollbar { width:4px; }
@@ -144,7 +143,15 @@
         </div>
     </div>
 
-    <!-- Controls -->
+    <!-- Incoming Prompts (moved here and made larger) -->
+    <div class="panel">
+        <div class="panel-title">Incoming Prompts</div>
+        <div class="prompts" id="prompts"><div class="empty">Waiting for prompts...</div></div>
+    </div>
+</div>
+
+<div class="grid-prompts">
+    <!-- Stream Controls (moved here and made larger) -->
     <div class="panel">
         <div class="panel-title">Stream Controls</div>
         <div class="controls">
@@ -160,19 +167,11 @@
             <button class="btn stop" id="stopBtn" onclick="stopStream()" style="display:none">■ STOP STREAM</button>
         </div>
     </div>
-</div>
-
-<div class="grid-prompts">
+    
     <!-- System log -->
     <div class="panel">
         <div class="panel-title">System Log</div>
         <div class="log" id="log"></div>
-    </div>
-    
-    <!-- Prompts (right side with more space) -->
-    <div class="panel">
-        <div class="panel-title">Incoming Prompts</div>
-        <div class="prompts" id="prompts"><div class="empty">Waiting for prompts...</div></div>
     </div>
 </div>
 
