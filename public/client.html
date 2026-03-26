@@ -457,114 +457,141 @@
 <div id="mbox"><button class="mcls" onclick="cm()">×</button><div id="mbody"></div></div>
 
 <script>
-// ── Elements ──
-const intro  = document.getElementById('intro');
-const app    = document.getElementById('app');
-const joinBtn= document.getElementById('joinBtn');
-const sdot   = document.getElementById('sdot');
-const stext  = document.getElementById('stext');
-const vid    = document.getElementById('remoteVideo');
-const ph     = document.getElementById('ph');
-
-// ── Audio element — unlocked by join button tap ──
-const aud = new Audio();
-
-joinBtn.addEventListener('click', () => {
-    console.log('Join button clicked');
-    intro.classList.add('out');
-    setTimeout(() => {
-        console.log('Transitioning to main app');
-        intro.style.display = 'none';
-        app.style.display = 'flex';
-        // Connect after the UI transition is complete
-        connect();
-    }, 500);
-});
-
-// ── Audio control button ──
-const audioControlBtn = document.getElementById('audioControlBtn');
-let audioEnabled = false;
-
-audioControlBtn.addEventListener('click', () => {
-    if (!audioEnabled) {
-        // Enable native controls and unmute
-        vid.controls = true;
-        vid.muted = false;
-        audioEnabled = true;
-        audioControlBtn.innerHTML = '🔇 Hide Controls';
-        audioControlBtn.style.background = 'linear-gradient(135deg, #ff6b6b, #ff9999)';
-        
-        // Try to play any existing audio
-        if (aud.srcObject) {
-            aud.muted = false;
-            aud.play().catch(err => console.warn('audio play:', err));
-        }
-    } else {
-        // Hide native controls  
-        vid.controls = false;
-        audioEnabled = false;
-        audioControlBtn.innerHTML = '🔊 Enable Audio';
-        audioControlBtn.style.background = 'linear-gradient(135deg, #8a6dff, #b794ff)';
-    }
-});
-
-// ── WebSocket + WebRTC state ──
-let ws, pc, returnPc, viewerStream;
-let actx, gain, src;
-let audioEnabled = false;
-
-// ── Audio unlock utility ──
-async function unlockAudio() {
-    try {
-        // Try to unlock audio context with a brief test
-        const testAudio = new Audio('data:audio/mp3;base64,SUQzAwAAAAAAI1RTU0UAAAAPAAADLU5vbmUAAAAAAAAAAAAAAAA//uQxAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4CP/7EMQAAAGkAIAABFAAAIAAABAAAAAAA4DAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA');
-        await testAudio.play();
-        testAudio.pause();
-        
-        // Also unlock the main audio element 
-        aud.play().catch(() => {});
-        audioEnabled = true;
-    } catch (error) {
-        console.warn('Audio unlock failed, continuing without audio:', error);
-        audioEnabled = false;
-    }
-}
-
-// ── WebSocket + WebRTC state ──
-
-async function connect() {
-    // Try to unlock audio in the background, don't wait for it
-    unlockAudio().catch(() => console.warn('Audio unlock failed'));
+// ── Wait for DOM to be ready ──
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded');
     
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${location.host}`);
+    // ── Elements ──
+    const intro  = document.getElementById('intro');
+    const app    = document.getElementById('app');
+    const joinBtn= document.getElementById('joinBtn');
+    const sdot   = document.getElementById('sdot');
+    const stext  = document.getElementById('stext');
+    const vid    = document.getElementById('remoteVideo');
+    const ph     = document.getElementById('ph');
 
-    ws.onopen = () => {
-        sdot.classList.add('live');
-        stext.textContent = 'Connected';
-        ws.send(JSON.stringify({ type: 'register-viewer' }));
-        initPc();
-        // Delay viewer cam start to ensure proper connection timing
-        setTimeout(() => startViewerCam(), 1000);
-    };
+    // ── Audio element — unlocked by join button tap ──
+    const aud = new Audio();
 
-    ws.onmessage = (e) => {
-        const d = JSON.parse(e.data);
-        if (d.type === 'webrtc-offer')         handleOffer(d.offer);
-        if (d.type === 'webrtc-ice-candidate') addIce(d.candidate);
-        if (d.type === 'return-feed-answer')   handleReturnAnswer(d.answer);
-        if (d.type === 'return-feed-ice')      addReturnIce(d.candidate);
-    };
+    // Check if elements exist
+    if (!intro || !app || !joinBtn) {
+        console.error('Missing elements:', {intro, app, joinBtn});
+        return;
+    }
 
-    ws.onclose = () => {
-        sdot.classList.remove('live');
-        stext.textContent = 'Reconnecting...';
-        setTimeout(connect, 3000);
-    };
-}
+    joinBtn.addEventListener('click', (e) => {
+        console.log('Join button clicked');
+        e.preventDefault();
+        
+        // Immediate transition
+        try {
+            intro.style.opacity = '0';
+            intro.style.pointerEvents = 'none';
+            
+            setTimeout(() => {
+                console.log('Transitioning to main app');
+                intro.style.display = 'none';
+                app.style.display = 'flex';
+                console.log('App should now be visible');
+                
+                // Connect after the UI transition is complete
+                connect();
+            }, 500);
+            
+        } catch (error) {
+            console.error('Transition error:', error);
+        }
+    });
+});
 
-// ── Peer connection (receiving stream) ──
-function initPc() {
+    // ── Audio control button ──
+    const audioControlBtn = document.getElementById('audioControlBtn');
+    let audioEnabled = false;
+
+    if (audioControlBtn) {
+        audioControlBtn.addEventListener('click', () => {
+            if (!audioEnabled) {
+                // Enable native controls and unmute
+                if (vid) {
+                    vid.controls = true;
+                    vid.muted = false;
+                }
+                audioEnabled = true;
+                audioControlBtn.innerHTML = '🔇 Hide Controls';
+                audioControlBtn.style.background = 'linear-gradient(135deg, #ff6b6b, #ff9999)';
+                
+                // Try to play any existing audio
+                if (aud && aud.srcObject) {
+                    aud.muted = false;
+                    aud.play().catch(err => console.warn('audio play:', err));
+                }
+            } else {
+                // Hide native controls  
+                if (vid) {
+                    vid.controls = false;
+                }
+                audioEnabled = false;
+                audioControlBtn.innerHTML = '🔊 Enable Audio';
+                audioControlBtn.style.background = 'linear-gradient(135deg, #8a6dff, #b794ff)';
+            }
+        });
+    }
+
+    // ── WebSocket + WebRTC state ──
+    let ws, pc, returnPc, viewerStream;
+    let actx, gain, src;
+
+    // ── Audio unlock utility ──
+    async function unlockAudio() {
+        try {
+            // Try to unlock audio context with a brief test
+            const testAudio = new Audio('data:audio/mp3;base64,SUQzAwAAAAAAI1RTU0UAAAAPAAADLU5vbmUAAAAAAAAAAAAAAAA//uQxAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4CP/7EMQAAAGkAIAABFAAAIAAABAAAAAAA4DAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA');
+            await testAudio.play();
+            testAudio.pause();
+            
+            // Also unlock the main audio element 
+            aud.play().catch(() => {});
+            audioEnabled = true;
+        } catch (error) {
+            console.warn('Audio unlock failed, continuing without audio:', error);
+            audioEnabled = false;
+        }
+    }
+
+    // ── WebSocket + WebRTC connection ──
+    async function connect() {
+        // Try to unlock audio in the background, don't wait for it
+        unlockAudio().catch(() => console.warn('Audio unlock failed'));
+        
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(`${proto}//${location.host}`);
+
+        ws.onopen = () => {
+            if (sdot) sdot.classList.add('live');
+            if (stext) stext.textContent = 'Connected';
+            ws.send(JSON.stringify({ type: 'register-viewer' }));
+            initPc();
+            // Delay viewer cam start to ensure proper connection timing
+            setTimeout(() => startViewerCam(), 1000);
+        };
+
+        ws.onmessage = (e) => {
+            const d = JSON.parse(e.data);
+            if (d.type === 'webrtc-offer')         handleOffer(d.offer);
+            if (d.type === 'webrtc-ice-candidate') addIce(d.candidate);
+            if (d.type === 'return-feed-answer')   handleReturnAnswer(d.answer);
+            if (d.type === 'return-feed-ice')      addReturnIce(d.candidate);
+        };
+
+        ws.onclose = () => {
+            if (sdot) sdot.classList.remove('live');
+            if (stext) stext.textContent = 'Reconnecting...';
+            setTimeout(connect, 3000);
+        };
+    }
+
+    // ── Peer connection (receiving stream) ──
+    function initPc() {
     const cfg = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
     pc = new RTCPeerConnection(cfg);
 
