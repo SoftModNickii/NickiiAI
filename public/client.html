@@ -320,52 +320,16 @@
         #privnotice strong { color: #ff6b9d; }
         #privnotice button { background:none; border:none; color:#94a3b8; cursor:pointer; font-size:20px; flex-shrink:0; }
 
-        /* Audio Control Button */
-        .audio-control {
-            position: absolute; bottom: 20px; left: 20px; z-index: 10;
-            background: linear-gradient(135deg, #8a6dff, #b794ff);
-            color: white; border: none; padding: 12px 16px;
+        /* Audio notice */
+        .audio-notice {
+            position: absolute; bottom: 20px; left: 50%; 
+            transform: translateX(-50%); z-index: 10;
+            background: rgba(255,255,255,0.95); backdrop-filter: blur(20px);
+            color: #64748b; padding: 12px 20px;
             font-size: 14px; font-weight: 600; border-radius: 20px;
-            cursor: pointer; font-family: inherit;
-            box-shadow: 0 8px 24px rgba(138,109,255,0.4);
-            transition: all 0.2s ease;
-            display: flex; align-items: center; gap: 8px;
-        }
-        .audio-control:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 32px rgba(138,109,255,0.5);
-        }
-        /* Connect overlay button */
-        .connect-overlay {
-            position: absolute; inset: 0; z-index: 10;
-            background: rgba(138,109,255,0.15); backdrop-filter: blur(20px);
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            gap: 20px; border-radius: 24px;
-            transition: opacity 0.3s ease;
-        }
-        .connect-overlay.hidden { 
-          opacity: 0; 
-          pointer-events: none; 
-          transition: opacity 0.3s ease;
-        }
-        .btn-connect-now {
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white; border: none; padding: 16px 32px;
-            font-size: 16px; font-weight: 700; border-radius: 12px;
-            cursor: pointer; font-family: inherit;
-            box-shadow: 0 8px 24px rgba(16,185,129,0.4);
-            transition: transform 0.15s, box-shadow 0.15s;
-            min-height: 52px;
-        }
-        .btn-connect-now:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 32px rgba(16,185,129,0.5);
-        }
-        .btn-connect-now:active { transform: scale(0.97); }
-        .connect-text {
-            font-size: 14px; color: #64748b; text-align: center;
-            max-width: 280px; line-height: 1.6;
+            border: 1px solid rgba(255,107,157,0.2);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            text-align: center;
         }
 
         @media (max-width: 768px) {
@@ -419,9 +383,8 @@
                     <div class="pulse-ring"></div>
                     <p class="ph-text">Connecting to Nickii's neural network...</p>
                 </div>
-                <div class="connect-overlay" id="connectOverlay">
-                    <button class="btn-connect-now" id="connectNowBtn">🎥 Connect Now</button>
-                    <p class="connect-text">Click to connect with Nickii AI and enable audio/video features</p>
+                <div class="audio-notice">
+                    <span>🎵 Please enable sound in your browser for the full experience</span>
                 </div>
                 <div class="glitter-wrap">
                     <div class="g"></div><div class="g"></div><div class="g"></div>
@@ -429,9 +392,6 @@
                     <div class="g"></div><div class="g"></div><div class="g"></div>
                     <div class="g"></div>
                 </div>
-                <button class="audio-control" id="audioControlBtn">
-                    🔊 Enable Audio
-                </button>
             </div>
         </div>
 
@@ -492,343 +452,235 @@
 <div id="mbox"><button class="mcls" onclick="cm()">×</button><div id="mbody"></div></div>
 
 <script>
-// ── Global variables accessible everywhere ──
-let ws, pc, returnPc, viewerStream;
-let aud, vid, sdot, stext, ph, connectOverlay;
-let actx, gain, src;
-let audioEnabled = false;
+// ── Basic WebRTC Implementation ──
+let ws, pc;
+let vid, sdot, stext, ph;
 
-// ── Initialize DOM elements and button handler ──
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded - initializing...');
+    console.log('DOM loaded - basic WebRTC init');
     
-    // Get all DOM elements immediately
+    // Get DOM elements
     const intro = document.getElementById('intro');
     const app = document.getElementById('app');
     const joinBtn = document.getElementById('joinBtn');
-    const connectNowBtn = document.getElementById('connectNowBtn');
     
     vid = document.getElementById('remoteVideo');
     sdot = document.getElementById('sdot');
     stext = document.getElementById('stext');
     ph = document.getElementById('ph');
-    connectOverlay = document.getElementById('connectOverlay');
-    aud = new Audio();
     
-    console.log('Elements found:', { 
+    console.log('Basic elements found:', { 
         intro: !!intro, 
         app: !!app, 
         joinBtn: !!joinBtn, 
-        connectNowBtn: !!connectNowBtn,
         vid: !!vid 
     });
     
-    if (!joinBtn) {
-        console.error('Join button not found!');
-        return;
-    }
-    
-    // First button: Just show the app (no connection yet)
-    joinBtn.onclick = function() {
-        console.log('Join button clicked - showing app');
-        
-        intro.style.transition = 'opacity 0.5s ease';
-        intro.style.opacity = '0';
-        
-        setTimeout(function() {
-            console.log('Transitioning to main app');
-            intro.style.display = 'none';
-            app.style.display = 'flex';
-            console.log('App is now visible - ready for connection');
+    // Simple single-step connection
+    if (joinBtn) {
+        joinBtn.onclick = function() {
+            console.log('Connecting to NickiiAI...');
             
-            // Set up handlers but don't connect yet
-            setupHandlers();
-        }, 500);
-    };
-    
-    // Second button: Actually connect
-    if (connectNowBtn) {
-        connectNowBtn.onclick = function() {
-            console.log('Connect Now button clicked - starting actual connection');
+            intro.style.transition = 'opacity 0.5s ease';
+            intro.style.opacity = '0';
             
-            // Hide the connect overlay
-            if (connectOverlay) connectOverlay.classList.add('hidden');
-            
-            // Start the actual connection process
-            initializeConnection();
+            setTimeout(function() {
+                intro.style.display = 'none';
+                app.style.display = 'flex';
+                
+                // Start connection immediately
+                setupBasicWebRTC();
+            }, 500);
         };
     }
+    
+    // Basic volume control
+    setupVolumeControl();
+    
+    // Basic prompt handling
+    setupPromptHandlers();
+    
+    // Neural animation
+    setupAnimations();
 });
 
-function setupHandlers() {
-    console.log('Setting up handlers...');
-    setupAudioControl();
-    setupVolumeControl();
-    setupPromptHandlers();
-    setupAnimations();
-}
-
-function initializeConnection() {
-    console.log('Initializing connection...');
-    connect();
-}
-
-function setupAudioControl() {
-    const audioControlBtn = document.getElementById('audioControlBtn');
-    if (!audioControlBtn) return;
+function setupBasicWebRTC() {
+    console.log('Setting up basic WebRTC...');
     
-    audioControlBtn.onclick = function() {
-        if (!audioEnabled) {
-            if (vid) {
-                vid.controls = true;
-                vid.muted = false;
-            }
-            audioEnabled = true;
-            audioControlBtn.innerHTML = '🔇 Hide Controls';
-            audioControlBtn.style.background = 'linear-gradient(135deg, #ff6b6b, #ff9999)';
-            
-            if (aud && aud.srcObject) {
-                aud.muted = false;
-                aud.play().catch(err => console.warn('audio play:', err));
-            }
-        } else {
-            if (vid) vid.controls = false;
-            audioEnabled = false;
-            audioControlBtn.innerHTML = '🔊 Enable Audio';
-            audioControlBtn.style.background = 'linear-gradient(135deg, #8a6dff, #b794ff)';
-        }
-    };
-}
-
-function setupVolumeControl() {
-    const volEl = document.getElementById('vol');
-    const volPct = document.getElementById('volpct');
-    if (!volEl || !volPct) return;
-    
-    volEl.oninput = function() {
-        volPct.textContent = volEl.value;
-        if (gain) gain.gain.value = volEl.value / 100;
-        if (aud) aud.volume = Math.min(volEl.value / 100, 1);
-    };
-}
-
-function setupPromptHandlers() {
-    const sendBtn = document.getElementById('sendBtn');
-    const promptInput = document.getElementById('promptInput');
-    
-    function send() {
-        if (!promptInput) return;
-        const text = promptInput.value.trim();
-        if (text && ws?.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type:'prompt', text:text }));
-            promptInput.value = '';
-        }
-    }
-    
-    if (sendBtn) sendBtn.onclick = send;
-    if (promptInput) promptInput.onkeypress = function(e) { if(e.key==='Enter') send(); };
-}
-
-function setupAnimations() {
-    // Neural params animation
-    setInterval(() => {
-        if (ws?.readyState === WebSocket.OPEN) {
-            const seedEl = document.getElementById('seed');
-            const tokensEl = document.getElementById('tokens');
-            if (seedEl) seedEl.textContent = Math.floor(Math.random() * 9000) + 1000;
-            if (tokensEl) tokensEl.textContent = Math.floor(Math.random() * 512) + 1536;
-        }
-    }, 3000);
-}
-
-async function connect() {
-    console.log('Starting connection...');
-    
-    // Simple audio unlock without the problematic base64 data
-    try {
-        if (aud) {
-            aud.muted = false;
-            await aud.play();
-            aud.pause();
-            audioEnabled = true;
-        }
-    } catch (error) {
-        console.warn('Audio unlock failed:', error);
-        audioEnabled = false;
-    }
-    
+    // Connect to WebSocket
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${location.host}`);
 
     ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('Connected to server');
         if (sdot) sdot.classList.add('live');
         if (stext) stext.textContent = 'Connected';
+        
+        // Register as viewer
         ws.send(JSON.stringify({ type: 'register-viewer' }));
-        initPeerConnection();
-        setTimeout(() => startViewerCam(), 1000);
+        
+        // Initialize peer connection
+        initBasicPeerConnection();
     };
 
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        if (data.type === 'webrtc-offer') handleOffer(data.offer);
-        if (data.type === 'webrtc-ice-candidate') addIceCandidate(data.candidate);
-        if (data.type === 'return-feed-answer') handleReturnAnswer(data.answer);
-        if (data.type === 'return-feed-ice') addReturnIce(data.candidate);
+        console.log('Received:', data.type);
+        
+        if (data.type === 'webrtc-offer') {
+            handleOffer(data.offer);
+        }
+        if (data.type === 'webrtc-ice-candidate') {
+            handleIceCandidate(data.candidate);
+        }
     };
 
     ws.onclose = () => {
+        console.log('Disconnected - reconnecting...');
         if (sdot) sdot.classList.remove('live');
         if (stext) stext.textContent = 'Reconnecting...';
-        setTimeout(connect, 3000);
+        setTimeout(setupBasicWebRTC, 3000);
+    };
+
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
     };
 }
 
-function initPeerConnection() {
-    console.log('Initializing peer connection with elements:', { vid: !!vid, aud: !!aud });
+function initBasicPeerConnection() {
+    console.log('Creating basic peer connection...');
     
-    const config = { iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-    ]};
+    // Simple STUN configuration
+    const config = {
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    };
     
     pc = new RTCPeerConnection(config);
 
+    // Handle incoming video/audio tracks
     pc.ontrack = (event) => {
-        console.log('Track received:', event.track.kind, 'vid exists:', !!vid, 'aud exists:', !!aud);
+        console.log('Received track:', event.track.kind);
         
-        if (!event.streams[0]) return;
-
         if (event.track.kind === 'video' && vid) {
+            console.log('Setting video stream');
             vid.srcObject = event.streams[0];
-            vid.muted = true;
-            vid.play().catch(() => {});
-            vid.classList.add('on');
-            if (ph) ph.classList.add('off');
-        }
-
-        if (event.track.kind === 'audio' && aud) {
-            aud.srcObject = new MediaStream([event.track]);
-            aud.muted = false;
-            aud.play().catch(err => console.warn('audio play:', err));
-            setupGain(new MediaStream([event.track]));
+            vid.controls = true;  // Enable basic video controls
+            vid.muted = false;    // Allow audio
+            vid.play().then(() => {
+                console.log('Video playing');
+                vid.classList.add('on');
+                if (ph) ph.classList.add('off');
+            }).catch(err => console.warn('Video play error:', err));
         }
     };
 
+    // Send ICE candidates to server
     pc.onicecandidate = (event) => {
-        if (event.candidate) {
-            ws.send(JSON.stringify({ 
-                type: 'webrtc-ice-candidate', 
-                candidate: event.candidate, 
-                target: 'controller' 
+        if (event.candidate && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'webrtc-ice-candidate',
+                candidate: event.candidate,
+                target: 'controller'
             }));
         }
     };
 
+    // Connection state logging
     pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'connected') { 
-            if (sdot) sdot.classList.add('live'); 
-            if (stext) stext.textContent = 'Live'; 
+        console.log('Connection state:', pc.connectionState);
+        if (pc.connectionState === 'connected') {
+            if (sdot) sdot.classList.add('live');
+            if (stext) stext.textContent = 'Live';
         }
-        if (pc.connectionState === 'failed') { 
-            if (sdot) sdot.classList.remove('live'); 
-            if (stext) stext.textContent = 'Error'; 
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+            if (sdot) sdot.classList.remove('live');
+            if (stext) stext.textContent = 'Connection Failed';
         }
     };
 }
 
 async function handleOffer(offer) {
-    if (!pc) initPeerConnection();
+    console.log('Handling WebRTC offer...');
+    
+    if (!pc) {
+        console.log('No peer connection, creating one...');
+        initBasicPeerConnection();
+        await new Promise(resolve => setTimeout(resolve, 100)); // Small delay
+    }
+    
     try {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        console.log('Remote description set');
+        
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify({ type: 'webrtc-answer', answer: answer, target: 'controller' }));
+        console.log('Answer created and set');
+        
+        ws.send(JSON.stringify({
+            type: 'webrtc-answer',
+            answer: answer,
+            target: 'controller'
+        }));
+        
+        console.log('Answer sent to server');
     } catch (error) {
         console.error('Error handling offer:', error);
     }
 }
 
-async function addIceCandidate(candidate) {
+async function handleIceCandidate(candidate) {
     if (candidate && pc) {
         try {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('ICE candidate added');
         } catch (error) {
             console.warn('Error adding ICE candidate:', error);
         }
     }
 }
 
-function setupGain(stream) {
-    try {
-        if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-        if (!gain) { 
-            gain = actx.createGain(); 
-            gain.connect(actx.destination); 
-        }
-        if (src) src.disconnect();
-        src = actx.createMediaStreamSource(stream);
-        src.connect(gain);
-        const volEl = document.getElementById('vol');
-        if (volEl) gain.gain.value = volEl.value / 100;
-    } catch (error) {
-        console.warn('Audio context error:', error);
+function setupVolumeControl() {
+    const volEl = document.getElementById('vol');
+    const volPct = document.getElementById('volpct');
+    if (volEl && volPct) {
+        volEl.oninput = function() {
+            volPct.textContent = volEl.value;
+            if (vid) vid.volume = Math.min(volEl.value / 100, 1);
+        };
     }
 }
 
-async function startViewerCam() {
-    try {
-        viewerStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    } catch (error) {
-        console.warn('Camera access denied:', error);
-        return;
-    }
-
-    const config = { iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-    ]};
+function setupPromptHandlers() {
+    const sendBtn = document.getElementById('sendBtn');
+    const promptInput = document.getElementById('promptInput');
     
-    returnPc = new RTCPeerConnection(config);
-    viewerStream.getTracks().forEach(track => returnPc.addTrack(track, viewerStream));
-    
-    returnPc.onicecandidate = (event) => {
-        if (event.candidate) {
-            ws.send(JSON.stringify({ 
-                type: 'return-feed-ice', 
-                candidate: event.candidate, 
-                target: 'controller' 
-            }));
+    function sendPrompt() {
+        if (!promptInput) return;
+        const text = promptInput.value.trim();
+        if (text && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'prompt', text: text }));
+            promptInput.value = '';
         }
-    };
+    }
     
-    try {
-        const offer = await returnPc.createOffer();
-        await returnPc.setLocalDescription(offer);
-        ws.send(JSON.stringify({ type: 'return-feed-offer', offer: offer, target: 'controller' }));
-    } catch (error) {
-        console.error('Error creating return feed offer:', error);
+    if (sendBtn) sendBtn.onclick = sendPrompt;
+    if (promptInput) {
+        promptInput.onkeypress = function(e) {
+            if (e.key === 'Enter') sendPrompt();
+        };
     }
 }
 
-async function handleReturnAnswer(answer) {
-    if (returnPc) {
-        try {
-            await returnPc.setRemoteDescription(new RTCSessionDescription(answer));
-        } catch (error) {
-            console.warn('Error handling return answer:', error);
+function setupAnimations() {
+    // Neural params animation
+    setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            const seedEl = document.getElementById('seed');
+            const tokensEl = document.getElementById('tokens');
+            if (seedEl) seedEl.textContent = Math.floor(Math.random() * 9000) + 1000;
+            if (tokensEl) tokensEl.textContent = Math.floor(Math.random() * 512) + 1536;
         }
-    }
-}
-
-async function addReturnIce(candidate) {
-    if (candidate && returnPc) {
-        try {
-            await returnPc.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (error) {
-            console.warn('Error adding return ICE candidate:', error);
-        }
-    }
+    }, 3000);
 }
 
 // ── Modals ──
