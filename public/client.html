@@ -457,268 +457,344 @@
 <div id="mbox"><button class="mcls" onclick="cm()">×</button><div id="mbody"></div></div>
 
 <script>
-// ── Wait for DOM to be ready ──
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded');
+// ── Global variables accessible everywhere ──
+let ws, pc, returnPc, viewerStream;
+let aud, vid, sdot, stext, ph;
+let actx, gain, src;
+let audioEnabled = false;
+
+// ── Initialize DOM elements and button handler ──
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded - initializing...');
     
-    // ── Elements ──
-    const intro  = document.getElementById('intro');
-    const app    = document.getElementById('app');
-    const joinBtn= document.getElementById('joinBtn');
-    const sdot   = document.getElementById('sdot');
-    const stext  = document.getElementById('stext');
-    const vid    = document.getElementById('remoteVideo');
-    const ph     = document.getElementById('ph');
-
-    // ── Audio element — unlocked by join button tap ──
-    const aud = new Audio();
-
-    // Check if elements exist
-    if (!intro || !app || !joinBtn) {
-        console.error('Missing elements:', {intro, app, joinBtn});
+    // Get all DOM elements immediately
+    const intro = document.getElementById('intro');
+    const app = document.getElementById('app');
+    const joinBtn = document.getElementById('joinBtn');
+    
+    vid = document.getElementById('remoteVideo');
+    sdot = document.getElementById('sdot');
+    stext = document.getElementById('stext');
+    ph = document.getElementById('ph');
+    aud = new Audio();
+    
+    console.log('Elements found:', { intro: !!intro, app: !!app, joinBtn: !!joinBtn, vid: !!vid });
+    
+    if (!joinBtn) {
+        console.error('Join button not found!');
         return;
     }
-
-    joinBtn.addEventListener('click', (e) => {
+    
+    joinBtn.onclick = function() {
         console.log('Join button clicked');
-        e.preventDefault();
         
-        // Immediate transition
-        try {
-            intro.style.opacity = '0';
-            intro.style.pointerEvents = 'none';
+        // Smooth transition
+        intro.style.transition = 'opacity 0.5s ease';
+        intro.style.opacity = '0';
+        
+        setTimeout(function() {
+            console.log('Transitioning to main app');
+            intro.style.display = 'none';
+            app.style.display = 'flex';
+            console.log('App should now be visible');
             
-            setTimeout(() => {
-                console.log('Transitioning to main app');
-                intro.style.display = 'none';
-                app.style.display = 'flex';
-                console.log('App should now be visible');
-                
-                // Connect after the UI transition is complete
-                connect();
-            }, 500);
-            
-        } catch (error) {
-            console.error('Transition error:', error);
-        }
-    });
+            // Initialize everything after UI is ready
+            setTimeout(initializeApp, 100);
+        }, 500);
+    };
 });
 
-    // ── Audio control button ──
+function initializeApp() {
+    console.log('Initializing app with elements:', { vid: !!vid, aud: !!aud, sdot: !!sdot });
+    
+    setupAudioControl();
+    setupVolumeControl();
+    setupPromptHandlers();
+    setupAnimations();
+    connect();
+}
+
+function setupAudioControl() {
     const audioControlBtn = document.getElementById('audioControlBtn');
-    let audioEnabled = false;
-
-    if (audioControlBtn) {
-        audioControlBtn.addEventListener('click', () => {
-            if (!audioEnabled) {
-                // Enable native controls and unmute
-                if (vid) {
-                    vid.controls = true;
-                    vid.muted = false;
-                }
-                audioEnabled = true;
-                audioControlBtn.innerHTML = '🔇 Hide Controls';
-                audioControlBtn.style.background = 'linear-gradient(135deg, #ff6b6b, #ff9999)';
-                
-                // Try to play any existing audio
-                if (aud && aud.srcObject) {
-                    aud.muted = false;
-                    aud.play().catch(err => console.warn('audio play:', err));
-                }
-            } else {
-                // Hide native controls  
-                if (vid) {
-                    vid.controls = false;
-                }
-                audioEnabled = false;
-                audioControlBtn.innerHTML = '🔊 Enable Audio';
-                audioControlBtn.style.background = 'linear-gradient(135deg, #8a6dff, #b794ff)';
+    if (!audioControlBtn) return;
+    
+    audioControlBtn.onclick = function() {
+        if (!audioEnabled) {
+            if (vid) {
+                vid.controls = true;
+                vid.muted = false;
             }
-        });
-    }
-
-    // ── WebSocket + WebRTC state ──
-    let ws, pc, returnPc, viewerStream;
-    let actx, gain, src;
-
-    // ── Audio unlock utility ──
-    async function unlockAudio() {
-        try {
-            // Try to unlock audio context with a brief test
-            const testAudio = new Audio('data:audio/mp3;base64,SUQzAwAAAAAAI1RTU0UAAAAPAAADLU5vbmUAAAAAAAAAAAAAAAA//uQxAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4CP/7EMQAAAGkAIAABFAAAIAAABAAAAAAA4DAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA');
-            await testAudio.play();
-            testAudio.pause();
-            
-            // Also unlock the main audio element 
-            aud.play().catch(() => {});
             audioEnabled = true;
-        } catch (error) {
-            console.warn('Audio unlock failed, continuing without audio:', error);
+            audioControlBtn.innerHTML = '🔇 Hide Controls';
+            audioControlBtn.style.background = 'linear-gradient(135deg, #ff6b6b, #ff9999)';
+            
+            if (aud && aud.srcObject) {
+                aud.muted = false;
+                aud.play().catch(err => console.warn('audio play:', err));
+            }
+        } else {
+            if (vid) vid.controls = false;
             audioEnabled = false;
+            audioControlBtn.innerHTML = '🔊 Enable Audio';
+            audioControlBtn.style.background = 'linear-gradient(135deg, #8a6dff, #b794ff)';
+        }
+    };
+}
+
+function setupVolumeControl() {
+    const volEl = document.getElementById('vol');
+    const volPct = document.getElementById('volpct');
+    if (!volEl || !volPct) return;
+    
+    volEl.oninput = function() {
+        volPct.textContent = volEl.value;
+        if (gain) gain.gain.value = volEl.value / 100;
+        if (aud) aud.volume = Math.min(volEl.value / 100, 1);
+    };
+}
+
+function setupPromptHandlers() {
+    const sendBtn = document.getElementById('sendBtn');
+    const promptInput = document.getElementById('promptInput');
+    
+    function send() {
+        if (!promptInput) return;
+        const text = promptInput.value.trim();
+        if (text && ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type:'prompt', text:text }));
+            promptInput.value = '';
         }
     }
+    
+    if (sendBtn) sendBtn.onclick = send;
+    if (promptInput) promptInput.onkeypress = function(e) { if(e.key==='Enter') send(); };
+}
 
-    // ── WebSocket + WebRTC connection ──
-    async function connect() {
-        // Try to unlock audio in the background, don't wait for it
-        unlockAudio().catch(() => console.warn('Audio unlock failed'));
+function setupAnimations() {
+    // Neural params animation
+    setInterval(() => {
+        if (ws?.readyState === WebSocket.OPEN) {
+            const seedEl = document.getElementById('seed');
+            const tokensEl = document.getElementById('tokens');
+            if (seedEl) seedEl.textContent = Math.floor(Math.random() * 9000) + 1000;
+            if (tokensEl) tokensEl.textContent = Math.floor(Math.random() * 512) + 1536;
+        }
+    }, 3000);
+}
+
+async function connect() {
+    console.log('Starting connection...');
+    
+    // Simple audio unlock without the problematic base64 data
+    try {
+        if (aud) {
+            aud.muted = false;
+            await aud.play();
+            aud.pause();
+            audioEnabled = true;
+        }
+    } catch (error) {
+        console.warn('Audio unlock failed:', error);
+        audioEnabled = false;
+    }
+    
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${protocol}//${location.host}`);
+
+    ws.onopen = () => {
+        console.log('WebSocket connected');
+        if (sdot) sdot.classList.add('live');
+        if (stext) stext.textContent = 'Connected';
+        ws.send(JSON.stringify({ type: 'register-viewer' }));
+        initPeerConnection();
+        setTimeout(() => startViewerCam(), 1000);
+    };
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'webrtc-offer') handleOffer(data.offer);
+        if (data.type === 'webrtc-ice-candidate') addIceCandidate(data.candidate);
+        if (data.type === 'return-feed-answer') handleReturnAnswer(data.answer);
+        if (data.type === 'return-feed-ice') addReturnIce(data.candidate);
+    };
+
+    ws.onclose = () => {
+        if (sdot) sdot.classList.remove('live');
+        if (stext) stext.textContent = 'Reconnecting...';
+        setTimeout(connect, 3000);
+    };
+}
+
+function initPeerConnection() {
+    console.log('Initializing peer connection with elements:', { vid: !!vid, aud: !!aud });
+    
+    const config = { iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+    ]};
+    
+    pc = new RTCPeerConnection(config);
+
+    pc.ontrack = (event) => {
+        console.log('Track received:', event.track.kind, 'vid exists:', !!vid, 'aud exists:', !!aud);
         
-        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        ws = new WebSocket(`${proto}//${location.host}`);
+        if (!event.streams[0]) return;
 
-        ws.onopen = () => {
-            if (sdot) sdot.classList.add('live');
-            if (stext) stext.textContent = 'Connected';
-            ws.send(JSON.stringify({ type: 'register-viewer' }));
-            initPc();
-            // Delay viewer cam start to ensure proper connection timing
-            setTimeout(() => startViewerCam(), 1000);
-        };
-
-        ws.onmessage = (e) => {
-            const d = JSON.parse(e.data);
-            if (d.type === 'webrtc-offer')         handleOffer(d.offer);
-            if (d.type === 'webrtc-ice-candidate') addIce(d.candidate);
-            if (d.type === 'return-feed-answer')   handleReturnAnswer(d.answer);
-            if (d.type === 'return-feed-ice')      addReturnIce(d.candidate);
-        };
-
-        ws.onclose = () => {
-            if (sdot) sdot.classList.remove('live');
-            if (stext) stext.textContent = 'Reconnecting...';
-            setTimeout(connect, 3000);
-        };
-    }
-
-    // ── Peer connection (receiving stream) ──
-    function initPc() {
-    const cfg = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
-    pc = new RTCPeerConnection(cfg);
-
-    pc.ontrack = (e) => {
-        if (!e.streams[0]) return;
-
-        if (e.track.kind === 'video') {
-            vid.srcObject = e.streams[0];
+        if (event.track.kind === 'video' && vid) {
+            vid.srcObject = event.streams[0];
             vid.muted = true;
-            vid.play().catch(()=>{});
+            vid.play().catch(() => {});
             vid.classList.add('on');
-            ph.classList.add('off');
+            if (ph) ph.classList.add('off');
         }
 
-        if (e.track.kind === 'audio') {
-            // Attach audio to audio element
-            aud.srcObject = new MediaStream([e.track]);
+        if (event.track.kind === 'audio' && aud) {
+            aud.srcObject = new MediaStream([event.track]);
             aud.muted = false;
             aud.play().catch(err => console.warn('audio play:', err));
-            // Also pipe through gain node for volume control
-            setupGain(new MediaStream([e.track]));
+            setupGain(new MediaStream([event.track]));
         }
     };
 
-    pc.onicecandidate = (e) => {
-        if (e.candidate) ws.send(JSON.stringify({ type:'webrtc-ice-candidate', candidate:e.candidate, target:'controller' }));
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            ws.send(JSON.stringify({ 
+                type: 'webrtc-ice-candidate', 
+                candidate: event.candidate, 
+                target: 'controller' 
+            }));
+        }
     };
 
     pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'connected') { sdot.classList.add('live'); stext.textContent = 'Live'; }
-        if (pc.connectionState === 'failed')    { sdot.classList.remove('live'); stext.textContent = 'Error'; }
+        if (pc.connectionState === 'connected') { 
+            if (sdot) sdot.classList.add('live'); 
+            if (stext) stext.textContent = 'Live'; 
+        }
+        if (pc.connectionState === 'failed') { 
+            if (sdot) sdot.classList.remove('live'); 
+            if (stext) stext.textContent = 'Error'; 
+        }
     };
 }
 
 async function handleOffer(offer) {
-    if (!pc) initPc();
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const ans = await pc.createAnswer();
-    await pc.setLocalDescription(ans);
-    ws.send(JSON.stringify({ type:'webrtc-answer', answer:ans, target:'controller' }));
+    if (!pc) initPeerConnection();
+    try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        ws.send(JSON.stringify({ type: 'webrtc-answer', answer: answer, target: 'controller' }));
+    } catch (error) {
+        console.error('Error handling offer:', error);
+    }
 }
 
-async function addIce(c) {
-    if (c && pc) await pc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
+async function addIceCandidate(candidate) {
+    if (candidate && pc) {
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+            console.warn('Error adding ICE candidate:', error);
+        }
+    }
 }
 
-// ── Gain / volume ──
 function setupGain(stream) {
     try {
         if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-        if (!gain) { gain = actx.createGain(); gain.connect(actx.destination); }
+        if (!gain) { 
+            gain = actx.createGain(); 
+            gain.connect(actx.destination); 
+        }
         if (src) src.disconnect();
         src = actx.createMediaStreamSource(stream);
         src.connect(gain);
-        gain.gain.value = document.getElementById('vol').value / 100;
-    } catch(e) {}
+        const volEl = document.getElementById('vol');
+        if (volEl) gain.gain.value = volEl.value / 100;
+    } catch (error) {
+        console.warn('Audio context error:', error);
+    }
 }
 
-const volEl = document.getElementById('vol');
-const volPct = document.getElementById('volpct');
-volEl.addEventListener('input', () => {
-    volPct.textContent = volEl.value;
-    if (gain) gain.gain.value = volEl.value / 100;
-    aud.volume = Math.min(volEl.value / 100, 1);
-});
-
-// ── Viewer cam (optional return feed) ──
 async function startViewerCam() {
-    try { viewerStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true }); }
-    catch(e) { return; }
+    try {
+        viewerStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch (error) {
+        console.warn('Camera access denied:', error);
+        return;
+    }
 
-    const cfg = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
-    returnPc = new RTCPeerConnection(cfg);
-    viewerStream.getTracks().forEach(t => returnPc.addTrack(t, viewerStream));
-    returnPc.onicecandidate = (e) => {
-        if (e.candidate) ws.send(JSON.stringify({ type:'return-feed-ice', candidate:e.candidate, target:'controller' }));
+    const config = { iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+    ]};
+    
+    returnPc = new RTCPeerConnection(config);
+    viewerStream.getTracks().forEach(track => returnPc.addTrack(track, viewerStream));
+    
+    returnPc.onicecandidate = (event) => {
+        if (event.candidate) {
+            ws.send(JSON.stringify({ 
+                type: 'return-feed-ice', 
+                candidate: event.candidate, 
+                target: 'controller' 
+            }));
+        }
     };
-    const offer = await returnPc.createOffer();
-    await returnPc.setLocalDescription(offer);
-    ws.send(JSON.stringify({ type:'return-feed-offer', offer, target:'controller' }));
-}
-
-async function handleReturnAnswer(a) {
-    if (returnPc) await returnPc.setRemoteDescription(new RTCSessionDescription(a)).catch(()=>{});
-}
-async function addReturnIce(c) {
-    if (c && returnPc) await returnPc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
-}
-
-// ── Prompt ──
-function send() {
-    const t = document.getElementById('promptInput').value.trim();
-    if (t && ws?.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type:'prompt', text:t }));
-        document.getElementById('promptInput').value = '';
+    
+    try {
+        const offer = await returnPc.createOffer();
+        await returnPc.setLocalDescription(offer);
+        ws.send(JSON.stringify({ type: 'return-feed-offer', offer: offer, target: 'controller' }));
+    } catch (error) {
+        console.error('Error creating return feed offer:', error);
     }
 }
-document.getElementById('sendBtn').addEventListener('click', send);
-document.getElementById('promptInput').addEventListener('keypress', e => { if(e.key==='Enter') send(); });
 
-// ── Neural params animation ──
-setInterval(() => {
-    if (ws?.readyState === WebSocket.OPEN) {
-        document.getElementById('seed').textContent   = Math.floor(Math.random()*9000)+1000;
-        document.getElementById('tokens').textContent = Math.floor(Math.random()*512)+1536;
+async function handleReturnAnswer(answer) {
+    if (returnPc) {
+        try {
+            await returnPc.setRemoteDescription(new RTCSessionDescription(answer));
+        } catch (error) {
+            console.warn('Error handling return answer:', error);
+        }
     }
-}, 3000);
+}
+
+async function addReturnIce(candidate) {
+    if (candidate && returnPc) {
+        try {
+            await returnPc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+            console.warn('Error adding return ICE candidate:', error);
+        }
+    }
+}
 
 // ── Modals ──
 const MD = {
-    about:     { t:'About NICKII AI',    b:'<p style="color:#64748b;line-height:1.8">NICKII AI is an advanced neural intelligence system for real-time AI performance and interaction.</p>' },
-    privacy:   { t:'Privacy Policy',     b:'<p style="color:#64748b;line-height:1.8"><strong style="color:#1e293b">Camera:</strong> Optional. If granted, your feed may be visible to the presenter.<br><br><strong style="color:#1e293b">Data:</strong> No data is stored. All streams are live only.</p>' },
-    terms:     { t:'Terms of Service',   b:'<p style="color:#64748b;line-height:1.8">By using NICKII AI you agree to use the service lawfully and respectfully.</p>' },
-    impressum: { t:'Impressum',          b:'<p style="color:#64748b;line-height:1.8">NICKII AI — Advanced Intelligence Systems.<br>Technical: Neural Network Processing / Real-time AI Communication.</p>' },
-    contact:   { t:'Contact',            b:'<p style="color:#64748b;line-height:1.8">info@nickii-ai.com<br>support@nickii-ai.com</p>' }
+    about: { t: 'About NICKII AI', b: '<p style="color:#64748b;line-height:1.8">NICKII AI is an advanced neural intelligence system for real-time AI performance and interaction.</p>' },
+    privacy: { t: 'Privacy Policy', b: '<p style="color:#64748b;line-height:1.8"><strong style="color:#1e293b">Camera:</strong> Optional. If granted, your feed may be visible to the presenter.<br><br><strong style="color:#1e293b">Data:</strong> No data is stored. All streams are live only.</p>' },
+    terms: { t: 'Terms of Service', b: '<p style="color:#64748b;line-height:1.8">By using NICKII AI you agree to use the service lawfully and respectfully.</p>' },
+    impressum: { t: 'Impressum', b: '<p style="color:#64748b;line-height:1.8">NICKII AI — Advanced Intelligence Systems.<br>Technical: Neural Network Processing / Real-time AI Communication.</p>' },
+    contact: { t: 'Contact', b: '<p style="color:#64748b;line-height:1.8">info@nickii-ai.com<br>support@nickii-ai.com</p>' }
 };
-function om(k) {
-    const m = MD[k]; if(!m) return;
-    document.getElementById('mbody').innerHTML = `<h2 style="font-size:22px;font-weight:800;background:linear-gradient(135deg,#ff6b9d,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:16px">${m.t}</h2>${m.b}`;
+
+function om(key) {
+    const modal = MD[key];
+    if (!modal) return;
+    document.getElementById('mbody').innerHTML = `<h2 style="font-size:22px;font-weight:800;background:linear-gradient(135deg,#ff6b9d,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:16px">${modal.t}</h2>${modal.b}`;
     document.getElementById('mbg').style.display = 'block';
     document.getElementById('mbox').style.display = 'block';
 }
+
 function cm() {
     document.getElementById('mbg').style.display = 'none';
     document.getElementById('mbox').style.display = 'none';
 }
-document.addEventListener('keydown', e => { if(e.key==='Escape') cm(); });
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cm(); });
 </script>
 </body>
 </html>
