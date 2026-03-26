@@ -33,32 +33,47 @@
         .video-wrap {
             position:relative;
             width:100%; aspect-ratio:1/1;
-            background:#000; border:1px solid rgba(0,255,65,0.3);
-            overflow:hidden;
-            border-radius:50%;
-            box-shadow: 0 0 20px rgba(0,255,65,0.2);
+            background:rgba(138,109,255,0.1); border:2px solid #8a6dff;
+            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+            box-shadow: 
+                0 0 20px rgba(138,109,255,0.3),
+                0 0 40px rgba(138,109,255,0.1),
+                inset 0 0 20px rgba(255,255,255,0.05);
+            transform: translateZ(0); /* GPU acceleration */
         }
         #localVideo { 
             width:100%; height:100%; 
             object-fit:cover; 
             display:none; 
-            border-radius:50%;
             position:relative;
         }
         #localVideo.on { 
             display:block;
-            animation: shimmer 4s ease-in-out infinite;
+            animation: purpleDiamondShimmer 4.5s ease-in-out infinite;
         }
-        @keyframes shimmer {
-            0%, 100% { box-shadow: 0 0 20px rgba(0,255,65,0.2); }
-            25% { box-shadow: 0 0 30px rgba(0,255,65,0.4), inset 0 0 30px rgba(255,255,255,0.1); }
-            75% { box-shadow: 0 0 25px rgba(0,255,65,0.3); }
+        @keyframes purpleDiamondShimmer {
+            0%, 100% { 
+                filter: brightness(1) contrast(1.05) saturate(1.1);
+                transform: translateZ(0) scale(1);
+                opacity: 0.95;
+            }
+            33% { 
+                filter: brightness(1.06) contrast(1.08) saturate(1.2);
+                transform: translateZ(0) scale(1.015);
+                opacity: 1;
+            }
+            66% { 
+                filter: brightness(1.03) contrast(1.06) saturate(1.15);
+                transform: translateZ(0) scale(1.008);
+                opacity: 0.97;
+            }
         }
         .vid-placeholder {
             position:absolute; inset:0;
             display:flex; align-items:center; justify-content:center;
-            font-size:12px; color:#00aa2e; letter-spacing:1px;
-            border-radius:50%;
+            font-size:12px; color:#8a6dff; letter-spacing:1px;
+            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+            background: linear-gradient(135deg, rgba(138,109,255,0.05), rgba(183,148,255,0.05));
         }
         .vid-placeholder.off { display:none; }
 
@@ -114,8 +129,10 @@
 <div class="grid-3">
     <div class="panel stat"><div class="panel-title">Viewers Online</div><div class="stat-val" id="viewerCount">0</div><div class="stat-label">CONNECTED</div></div>
     <div class="panel stat"><div class="panel-title">Prompts</div><div class="stat-val" id="promptCount">0</div><div class="stat-label">RECEIVED</div></div>
-    <div class="panel stat"><div class="panel-title">Status</div><div class="stat-val" id="streamStat" style="font-size:18px;padding-top:8px">IDLE</div><div class="stat-label">STREAM</div></div>
+    <div class="panel stat"><div class="panel-title">Client Audio</div><div class="stat-val" id="audioStat" style="font-size:18px;padding-top:8px;color:#8a6dff">OFF</div><div class="stat-label">STATUS</div></div>
 </div>
+
+<div class="panel stat" style="margin-bottom:16px;text-align:center;"><div class="panel-title">Stream Status</div><div class="stat-val" id="streamStat" style="font-size:18px;padding-top:8px">IDLE</div><div class="stat-label">CURRENT</div></div>
 
 <div class="grid">
     <!-- Video preview -->
