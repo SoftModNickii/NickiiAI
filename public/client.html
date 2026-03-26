@@ -358,8 +358,8 @@
 <div id="intro">
     <div class="intro-logo">N</div>
     <h1 class="intro-title">NICKII AI</h1>
-    <p class="intro-sub">Experience the next generation of AI interaction. Camera access is optional — you can watch without sharing your video.</p>
-    <button class="btn-join" id="joinBtn">Connect to Nickii AI</button>
+    <p class="intro-sub">Experience the next generation of AI interaction.</p>
+    <button class="btn-join" id="joinBtn">Connect with NickiiAI</button>
 </div>
 
 <!-- APP -->
@@ -470,10 +470,13 @@ const ph     = document.getElementById('ph');
 const aud = new Audio();
 
 joinBtn.addEventListener('click', () => {
+    console.log('Join button clicked');
     intro.classList.add('out');
     setTimeout(() => {
+        console.log('Transitioning to main app');
         intro.style.display = 'none';
         app.style.display = 'flex';
+        // Connect after the UI transition is complete
         connect();
     }, 500);
 });
@@ -510,75 +513,29 @@ let ws, pc, returnPc, viewerStream;
 let actx, gain, src;
 let audioEnabled = false;
 
-// ── Audio Permission Modal ──
-function showAudioModal() {
-    const modal = document.getElementById('audioModal');
-    modal.style.display = 'flex';
-    
-    // Add click handlers for modal buttons
-    document.getElementById('enableAudioBtn').addEventListener('click', enableAudio);
-    document.getElementById('continueWithoutAudioBtn').addEventListener('click', continueWithoutAudio);
-}
-
-function hideAudioModal() {
-    const modal = document.getElementById('audioModal');
-    modal.style.display = 'none';
-}
-
-async function enableAudio() {
+// ── Audio unlock utility ──
+async function unlockAudio() {
     try {
-        // Test audio permission with a brief test tone
+        // Try to unlock audio context with a brief test
         const testAudio = new Audio('data:audio/mp3;base64,SUQzAwAAAAAAI1RTU0UAAAAPAAADLU5vbmUAAAAAAAAAAAAAAAA//uQxAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4CP/7EMQAAAGkAIAABFAAAIAAABAAAAAAA4DAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA');
         await testAudio.play();
         testAudio.pause();
         
         // Also unlock the main audio element 
         aud.play().catch(() => {});
-        
         audioEnabled = true;
-        updateAudioStatus(true);
-        hideAudioModal();
-        startApp();
     } catch (error) {
-        console.warn('Audio test failed:', error);
-        // Fallback: try to unlock anyway
-        aud.play().catch(() => {});
+        console.warn('Audio unlock failed, continuing without audio:', error);
         audioEnabled = false;
-        updateAudioStatus(false);
-        hideAudioModal(); 
-        startApp();
     }
-}
-
-function continueWithoutAudio() {
-    audioEnabled = false;
-    updateAudioStatus(false);
-    hideAudioModal();
-    startApp();
-}
-
-function startApp() {
-    app.style.display = 'flex';
-    connect();
-}
-
-function updateAudioStatus(enabled) {
-    // Add audio status indicator if it doesn't exist
-    let statusEl = document.querySelector('.audio-status');
-    if (!statusEl) {
-        statusEl = document.createElement('div');
-        statusEl.className = 'audio-status';
-        statusEl.innerHTML = '<div class="audio-status-icon"></div><span>Audio</span>';
-        document.querySelector('.header').appendChild(statusEl);
-    }
-    
-    statusEl.className = enabled ? 'audio-status enabled' : 'audio-status muted';
-    statusEl.querySelector('span').textContent = enabled ? 'Audio On' : 'Audio Off';
 }
 
 // ── WebSocket + WebRTC state ──
 
-function connect() {
+async function connect() {
+    // Try to unlock audio in the background, don't wait for it
+    unlockAudio().catch(() => console.warn('Audio unlock failed'));
+    
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${proto}//${location.host}`);
 
@@ -587,7 +544,8 @@ function connect() {
         stext.textContent = 'Connected';
         ws.send(JSON.stringify({ type: 'register-viewer' }));
         initPc();
-        startViewerCam();
+        // Delay viewer cam start to ensure proper connection timing
+        setTimeout(() => startViewerCam(), 1000);
     };
 
     ws.onmessage = (e) => {
