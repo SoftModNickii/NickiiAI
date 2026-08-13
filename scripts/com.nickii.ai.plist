@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  NICKII AI, server LaunchAgent. Section 12 of NICKIIAI.md.
+  Keeps node server.js alive across crashes and reboots, and holds the Mac
+  awake with caffeinate -dims for the length of the show.
+
+  Install (replace the path with wherever the repo lives on the show Mac):
+
+    sed "s|__NICKII_DIR__|$PWD|g" scripts/com.nickii.ai.plist \
+      > ~/Library/LaunchAgents/com.nickii.ai.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.nickii.ai.plist
+
+  Stop:    launchctl bootout gui/$(id -u)/com.nickii.ai
+  Restart: launchctl kickstart -k gui/$(id -u)/com.nickii.ai
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.nickii.ai</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin; exec /usr/bin/caffeinate -dims node server.js</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__NICKII_DIR__</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+
+  <key>StandardOutPath</key>
+  <string>__NICKII_DIR__/logs/launchd-server.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__NICKII_DIR__/logs/launchd-server.err.log</string>
+
+  <key>ProcessType</key>
+  <string>Interactive</string>
+</dict>
+</plist>

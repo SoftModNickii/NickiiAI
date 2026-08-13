@@ -1,119 +1,106 @@
-# NICKII AI - WebRTC Streaming System
+# NICKII AI
 
-A professional AI streaming interface with WebRTC support for live video/audio streaming and real-time viewer interaction.
+A two device performance installation by Nickii Schamborski, for the Ars Electronica Campus
+Exhibition (Linz, September 2026).
 
-## Features
+The visitor believes they are talking to an AI. In reality, Nickii is the AI, live.
 
-- 🎥 **WebRTC Live Streaming** from OBS Virtual Camera
-- 🎤 **Audio Support** via BlackHole 2ch or system audio
-- 📱 **Mobile Optimized** UI with responsive design
-- 👥 **Multiple Viewers** can connect simultaneously
-- 🎛️ **Control Panel** with Matrix green theme
-- 💬 **Real-time Prompts** from viewers to presenter
-- 📹 **Optional Viewer Webcam** feedback to control panel
-- 🎨 **Premium Pink/Glitter** AI aesthetic
+**[NICKIIAI.md](NICKIIAI.md) is the specification and the single source of truth.** This file
+is only the short operating summary.
 
-## Quick Start
+---
 
-### Local Development
-```bash
-npm install
-npm start
+## What runs where
+
+**iPad, the visitor surface.** Her live face fills the screen, rendered on the device so it
+reads as a machine's picture of a face rather than a video call, and her live voice comes out
+of the speaker. A prismatic light runs the edge of the screen and is the whole interface. One
+glass disc says *Hold to speak*. Her answer arrives as her own voice, whenever she chooses.
+
+**MacBook, everything else.** It serves the app over local HTTPS, runs the signaling, runs
+Whisper, and publishes her outgoing feed from OBS. She wears an earpiece and hears the room
+continuously.
+
+No internet dependency, and no speech synthesis anywhere. The only voice belongs to Nickii.
+
+## The three channels
+
+| Channel | Direction | Transport | Gated |
+| --- | --- | --- | --- |
+| Her face and voice | Mac to iPad | WebRTC video + audio, `webrtc-*` signaling | always on |
+| Room audio (her earpiece) | iPad to Mac | WebRTC audio, `return-feed-*` signaling | always on, never recorded |
+| Visitor messages | iPad to Mac | 16 kHz PCM over WSS, then Whisper | only while push to talk is held |
+
+Whisper only ever receives push to talk audio. The continuous monitor stream goes to her ear
+and nowhere else: never written to disk, buffered, or logged.
+
+## Run it
+
+Double-click **NICKII AI.app** on the Desktop. It starts whisper and the server, waits until
+`/health` actually answers, prints what is and is not running, and opens the controller.
+
+Build that launcher once with `./scripts/make-launcher.sh`. By hand:
+
+```sh
+./scripts/nickii.sh          # start, and open the controller
+./scripts/nickii.sh status   # what is running, plus the health endpoint
+./scripts/nickii.sh stop
 ```
 
-Visit:
-- **Viewer Interface**: http://localhost:3000
-- **Control Panel**: http://localhost:3000/control
+- visitor surface: `https://nickii.ai/`
+- controller: `https://nickii.ai/control`
+- health: `https://nickii.ai/health`
 
-## Deployment to Render.com
+The visitor must never see an IP, so `nickii.ai` resolves from `scripts/dns.js` and exists only
+on this network. `nickii.local:8443` and the raw IP keep working as fallbacks; the certificate
+covers all of them.
 
-### Prerequisites
-- GitHub repository with your code
-- Render.com account (free tier available)
+Full setup, including the network, the OBS and BlackHole chain, the launchd agents, the iPad
+Home Screen app and Guided Access, is in [scripts/setup-network.md](scripts/setup-network.md).
 
-### Step-by-Step Deployment
+Hidden operator panels: `Cmd+.` on the controller, and four taps in the top left corner on the
+iPad. Both are read-only diagnostics.
 
-1. **Push to GitHub**:
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial NICKII AI commit"
-   git remote add origin YOUR_GITHUB_REPO_URL
-   git push -u origin main
-   ```
+## Tests
 
-2. **Connect to Render**:
-   - Go to [render.com](https://render.com)
-   - Sign up/login with GitHub
-   - Click "New +" → "Web Service"
-   - Connect your GitHub repository
+```sh
+npm test
+```
 
-3. **Configure Service**:
-   - **Name**: `nickii-ai`
-   - **Environment**: `Node`
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-   - **Plan**: Free tier is sufficient for testing
+163 checks, no dependencies, roughly a minute. Four suites:
 
-4. **Deploy**:
-   - Click "Create Web Service"
-   - Render will automatically deploy your app
-   - You'll get a URL like: `https://nickii-ai-xxxx.onrender.com`
+- `tests/resampler.js` runs the capture worklet outside a browser and proves the 16 kHz PCM fed
+  to Whisper is sample exact at both 48 and 44.1 kHz.
+- `tests/protocol.js` drives a controller and two viewers through the whole signaling contract
+  against its own server on its own ports, so it never disturbs a rehearsal.
+- `tests/pages.js` loads both surfaces in a real browser and asserts they run without errors,
+  with every element present and the stylesheet actually applied.
+- `tests/layout.js` measures real bounding boxes in both orientations, in every state, at full
+  swell, and fails on any overlap. It also enforces that nothing is ever laid over her face.
 
-### Post-Deployment
+These exist because the recurring faults in this project were exactly two kinds: things
+overlapping, and stylesheets silently not applying. Both are invisible until someone looks at
+the right screen in the right orientation.
 
-- **Viewer Interface**: `https://your-app.onrender.com`
-- **Control Panel**: `https://your-app.onrender.com/control`
+## Files
 
-## Usage Instructions
+```
+server.js                   HTTPS + WSS + signaling + PTT ingest + whisper bridge
+config.js                   single config, also served to the browser at /config.json
+public/client.html          iPad visitor surface (HTML + CSS + JS + GLSL)
+public/control.html         Nickii's controller surface
+public/shared.js            socket, heartbeat, backoff reconnect, watchdog
+public/worklet-capture.js   mic to 16 kHz mono Int16 PCM
+public/fonts/               Archivo, self-hosted: the gallery has no uplink
+scripts/nickii.sh           the launcher
+scripts/dns.js              answers nickii.ai on the local network
+scripts/setup-network.md    the full runbook
+tests/                      npm test
+```
 
-### For Presenters (Control Panel)
-1. Open `/control` URL
-2. Select camera source (OBS Virtual Camera recommended)
-3. Select audio source (BlackHole 2ch for system audio)
-4. Click "START CAMERA + MIC" or "START SCREEN SHARE + AUDIO"
-5. Share the main URL with viewers
+## Cloud fallback
 
-### For Viewers (Main Interface)  
-1. Open the main URL
-2. Click "Connect to Nickii AI"
-3. Watch the stream (camera permission is optional)
-4. Send prompts via the input field
-5. Optional: Allow camera access to appear in presenter's return feed
-
-## Technical Details
-
-- **Backend**: Node.js + Express + WebSocket
-- **Frontend**: Vanilla JavaScript + WebRTC
-- **Styling**: Custom CSS with mobile-first responsive design
-- **Real-time**: WebSocket for signaling, WebRTC for media
-
-## Browser Compatibility
-
-- ✅ Chrome/Chromium (recommended)
-- ✅ Safari (including mobile)
-- ✅ Firefox 
-- ✅ Edge
-
-## Audio/Video Sources
-
-- **OBS Virtual Camera**: Recommended for professional streaming
-- **BlackHole 2ch**: For routing system audio on macOS
-- **Screen Share**: Built-in browser screen capture
-- **Physical Camera/Mic**: Standard webcam/microphone
-
-## Troubleshooting
-
-### Common Issues
-- **No Audio on Mobile**: Audio starts on first user interaction (tap screen)
-- **Camera Permission**: Optional for viewers, required for presenters
-- **WebRTC Connection**: Ensure HTTPS in production for best compatibility
-
-### Free Tier Limitations
-- Render free tier sleeps after 15 minutes of inactivity
-- First request after sleep takes ~30 seconds to wake up
-- Consider paid tier for production use
-
-## License
-
-ISC License
+`render.yaml` is unchanged and stays as the last rung of the failure ladder. Render mode is
+detected automatically from the environment (or forced with `NICKII_MODE=render`), which serves
+plain HTTP behind Render's own TLS and re-enables STUN. Whisper is not available there, so the
+message layer degrades to "try again" while her feed keeps working.

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  NICKII AI, whisper LaunchAgent. Same pattern as com.nickii.ai.plist,
+  supervising scripts/start-whisper.sh so the model is loaded and waiting
+  after any crash or reboot.
+
+  Install:
+
+    sed "s|__NICKII_DIR__|$PWD|g" scripts/com.nickii.whisper.plist \
+      > ~/Library/LaunchAgents/com.nickii.whisper.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.nickii.whisper.plist
+
+  Stop:    launchctl bootout gui/$(id -u)/com.nickii.whisper
+  Restart: launchctl kickstart -k gui/$(id -u)/com.nickii.whisper
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.nickii.whisper</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin; exec ./scripts/start-whisper.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__NICKII_DIR__</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>__NICKII_DIR__/logs/launchd-whisper.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__NICKII_DIR__/logs/launchd-whisper.err.log</string>
+
+  <key>ProcessType</key>
+  <string>Interactive</string>
+</dict>
+</plist>

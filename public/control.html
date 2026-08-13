@@ -1,356 +1,840 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NICKII AI — Control</title>
-    <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Courier New',monospace; background:#0a0a0a; color:#00ff41; min-height:100vh; padding:20px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nickii</title>
+<link rel="icon" href="/icons/icon-192.png">
+<style>
+/* Archivo, self-hosted. A Google Fonts link would resolve to nothing in the
+   gallery, where there is no uplink, and the page would quietly fall back to
+   the system font on show day. Two subsets, 68 KB total: latin covers English
+   and the German umlauts and eszett, latin-ext covers the rest. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/archivo-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/archivo-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+</style>
+<style>
+:root {
+  /* Same field as the visitor surface: neutral with the faintest purple blue
+     cast, so both screens read as one instrument. */
+  --bg-0: #EBEAF2;
+  --bg-blob-1: #DEE1F1;
+  --bg-blob-2: #E9E2F1;
 
-        .header { border:1px solid #00ff41; padding:16px 20px; margin-bottom:20px; background:rgba(0,255,65,0.03); display:flex; justify-content:space-between; align-items:center; }
-        .title { font-size:26px; font-weight:bold; text-shadow:0 0 10px #00ff41; letter-spacing:2px; }
-        .subtitle { font-size:12px; color:#00aa2e; margin-top:4px; }
-        .hright { text-align:right; }
-        .conn-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444; margin-right:6px; }
-        .conn-dot.live { background:#00ff41; box-shadow:0 0 8px #00ff41; animation:blink 2s infinite; }
-        @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  --glass-fill: rgba(255,255,255,0.62);
+  --glass-edge: rgba(255,255,255,0.94);
+  --glass-line: rgba(28,22,56,0.09);
+  --glass-blur: 30px;
 
-        .grid { display:grid; grid-template-columns:1fr 1.5fr; gap:16px; margin-bottom:16px; }
-        .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px; }
-        .grid-prompts { display:grid; grid-template-columns:1.5fr 1fr; gap:16px; margin-bottom:16px; }
+  --ink-hi: #1B1A24;
+  --ink-lo: #8A8796;
 
-        .panel { border:1px solid #00ff41; background:rgba(0,255,65,0.03); padding:16px; }
-        .panel-title { font-size:11px; color:#00aa2e; letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; border-bottom:1px solid rgba(0,255,65,0.2); padding-bottom:8px; }
+  /* The accent is the same prismatic family as the edge light, used only where
+     a value has to be read at a glance. */
+  --accent: #B486DC;
+  --ok: #3E9B6D;
 
-        /* Stats */
-        .stat { text-align:center; }
-        .stat-val { font-size:36px; font-weight:bold; text-shadow:0 0 12px #00ff41; }
-        .stat-label { font-size:11px; color:#00aa2e; letter-spacing:1px; margin-top:4px; }
+  --font-display: "Archivo", -apple-system, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
 
-        /* Video preview — circular */
-        .video-panel { border:1px solid #00ff41; background:rgba(0,255,65,0.03); padding:16px; }
-        .video-wrap {
-            position:relative;
-            width:100%; aspect-ratio:1/1;
-            background:rgba(138,109,255,0.1); border:2px solid #8a6dff;
-            border-radius: 16px; overflow: hidden;
-            box-shadow: 
-                0 0 20px rgba(138,109,255,0.3),
-                0 0 40px rgba(138,109,255,0.1),
-                inset 0 0 20px rgba(255,255,255,0.05);
-            transform: translateZ(0); /* GPU acceleration */
-        }
-        #localVideo { 
-            width:100%; height:100%; 
-            object-fit:cover; 
-            display:none; 
-            position:relative;
-        }
-        #localVideo.on { 
-            display:block;
-            animation: purpleDiamondShimmer 4.5s ease-in-out infinite;
-        }
-        @keyframes purpleDiamondShimmer {
-            0%, 100% { 
-                filter: brightness(1) contrast(1.05) saturate(1.1);
-                transform: translateZ(0) scale(1);
-                opacity: 0.95;
-            }
-            33% { 
-                filter: brightness(1.06) contrast(1.08) saturate(1.2);
-                transform: translateZ(0) scale(1.015);
-                opacity: 1;
-            }
-            66% { 
-                filter: brightness(1.03) contrast(1.06) saturate(1.15);
-                transform: translateZ(0) scale(1.008);
-                opacity: 0.97;
-            }
-        }
-        .vid-placeholder {
-            position:absolute; inset:0;
-            display:flex; align-items:center; justify-content:center;
-            font-size:12px; color:#8a6dff; letter-spacing:1px;
-            background: linear-gradient(135deg, rgba(138,109,255,0.05), rgba(183,148,255,0.05));
-        }
-        .vid-placeholder.off { display:none; }
+  --shadow-soft: 0 0.5px 1px rgba(32,24,64,0.05), 0 3px 10px rgba(32,24,64,0.06);
+  --shadow-pane: 0 0.5px 1px rgba(32,24,64,0.06),
+                 0 6px 16px rgba(32,24,64,0.07),
+                 0 20px 48px rgba(32,24,64,0.08);
 
-        /* Controls */
-        .controls { display:flex; flex-direction:column; gap:10px; }
-        label { font-size:11px; color:#00aa2e; letter-spacing:1px; display:block; margin-bottom:4px; }
-        select {
-            width:100%; background:#0a0a0a; color:#00ff41; border:1px solid #00ff41;
-            padding:8px 10px; font-family:'Courier New',monospace; font-size:12px;
-        }
-        .btn {
-            width:100%; padding:10px; font-family:'Courier New',monospace; font-size:12px;
-            letter-spacing:1px; cursor:pointer; border:1px solid #00ff41;
-            background:rgba(0,255,65,0.05); color:#00ff41; transition:all 0.2s;
-        }
-        .btn:hover { background:rgba(0,255,65,0.15); box-shadow:0 0 10px rgba(0,255,65,0.3); }
-        .btn.stop { border-color:#ff4444; color:#ff4444; background:rgba(255,68,68,0.05); }
-        .btn.stop:hover { background:rgba(255,68,68,0.15); }
+  --radius-pane: 22px;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 180ms;
+  --dur-med: 320ms;
+}
 
-        /* Log */
-        .log {
-            height:200px; overflow-y:auto; font-size:11px; line-height:1.8;
-            color:#00aa2e; border:1px solid rgba(0,255,65,0.2); padding:10px;
-            background:rgba(0,0,0,0.3);
-        }
-        .log .err { color:#ff4444; }
-        .log .ok  { color:#00ff41; }
-        .log::-webkit-scrollbar { width:4px; }
-        .log::-webkit-scrollbar-thumb { background:#00ff41; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-        /* Prompts */
-        .prompts { height:220px; overflow-y:auto; font-size:12px; line-height:1.9; color:#00ff41; }
-        .prompt-item { border-bottom:1px solid rgba(0,255,65,0.1); padding:6px 0; }
-        .prompt-time { color:#00aa2e; font-size:10px; margin-right:8px; }
-        .prompts::-webkit-scrollbar { width:4px; }
-        .prompts::-webkit-scrollbar-thumb { background:#00ff41; }
-        .empty { color:#00aa2e; font-size:11px; font-style:italic; }
-    </style>
+html, body {
+  height: 100%;
+  background: var(--bg-0);
+  color: var(--ink-hi);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  font-optical-sizing: auto;
+  font-variation-settings: "wdth" 100;
+  overflow: hidden;
+}
+
+/* Two blurred ambient shapes, so the glass has something to refract. */
+.blob { position: fixed; border-radius: 50%; filter: blur(90px); pointer-events: none; opacity: 0.85; }
+.blob-1 { width: 46vw; height: 46vw; background: var(--bg-blob-1); top: -12vw; left: -8vw; animation: drift1 60s linear infinite; }
+.blob-2 { width: 42vw; height: 42vw; background: var(--bg-blob-2); bottom: -14vw; right: -6vw; animation: drift2 60s linear infinite; }
+
+/* Same grain as the visitor surface, for the same reason: light gradients
+   band on an 8 bit panel. */
+#grain {
+  position: fixed; inset: 0; pointer-events: none;
+  opacity: 0.03; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+@keyframes drift1 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(6vw, 5vh); } }
+@keyframes drift2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-5vw, -6vh); } }
+
+/* ---------------------------------------------------------- layout */
+#shell {
+  position: relative;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 34px;
+  padding: 34px 40px;
+}
+
+#rail { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+
+.wordmark {
+  display: flex; align-items: baseline; gap: 9px;
+  font-size: 14px; font-weight: 500; letter-spacing: 0.20em;
+  text-transform: uppercase; color: var(--ink-hi);
+}
+.wordmark .ai { font-weight: 400; color: var(--ink-lo); }
+
+/* Self preview of the outgoing feed. Muted: her voice must never come out of
+   the Mac speakers. */
+#preview-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.5);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--shadow-soft);
+}
+#preview { width: 100%; height: 100%; object-fit: cover; display: block; }
+#preview-none {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 300; color: var(--ink-lo);
+}
+#preview-none.hidden { display: none; }
+
+/* Status rows: four quiet facts, no dashboard. */
+.rows { display: flex; flex-direction: column; gap: 9px; }
+.row { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 300; color: var(--ink-lo); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(27,26,36,0.16); flex-shrink: 0; transition: background var(--dur-med) ease, box-shadow var(--dur-med) ease; }
+.dot.on { background: var(--ok); box-shadow: 0 0 0 3px rgba(62,155,109,0.16); }
+.row b { font-weight: 400; color: var(--ink-hi); margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* Monitor: one level meter and one mute toggle. */
+#monitor { display: flex; flex-direction: column; gap: 12px; margin-top: auto; }
+#meter { height: 3px; border-radius: 2px; background: rgba(27,26,36,0.09); overflow: hidden; }
+#meter-fill { height: 100%; width: 0%; background: var(--accent); opacity: 0.9; transition: width 80ms linear; }
+#mute {
+  appearance: none; -webkit-appearance: none;
+  font: inherit; font-size: 13px; font-weight: 400; color: var(--ink-lo);
+  background: rgba(255,255,255,0.55);
+  border: 1px solid var(--glass-line);
+  border-radius: 14px; padding: 11px 15px; cursor: pointer; text-align: left;
+  box-shadow: var(--shadow-soft);
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease;
+}
+#mute:hover { background: rgba(255,255,255,0.85); color: var(--ink-hi); }
+#mute.muted { color: var(--ink-hi); border-color: rgba(180,134,220,0.5); background: rgba(255,255,255,0.85); }
+#mute:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(180,134,220,0.18); }
+
+/* ---------------------------------------------------------- messages */
+#stream {
+  position: relative;
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-pane);
+  box-shadow: var(--shadow-pane), inset 0 1px 0 var(--glass-edge);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  will-change: transform;
+  padding: 44px 48px;
+  overflow: hidden;
+}
+
+#latest { flex-shrink: 0; min-height: 30vh; display: flex; flex-direction: column; justify-content: center; }
+#latest .meta { font-size: 13px; font-weight: 300; color: var(--ink-lo); margin-bottom: 14px; font-variant-numeric: tabular-nums; }
+#latest .text {
+  font-size: clamp(28px, 3.2vw, 50px);
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  line-height: 1.18;
+  color: var(--ink-hi);
+}
+#latest.fresh { animation: land var(--dur-med) var(--ease-spring) both; }
+@keyframes land { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+#empty { font-size: 17px; font-weight: 300; color: var(--ink-lo); }
+
+#history {
+  margin-top: 30px; padding-top: 24px;
+  border-top: 1px solid var(--glass-line);
+  overflow-y: auto; min-height: 0; flex: 1;
+  display: flex; flex-direction: column; gap: 14px;
+  opacity: 0.55;
+  mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+}
+#history::-webkit-scrollbar { width: 0; }
+.hist { font-size: 15px; font-weight: 300; line-height: 1.45; color: var(--ink-hi); }
+.hist span { color: var(--ink-lo); margin-right: 12px; font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------- operator panel */
+/* Never visible by default. Cmd+. toggles it. */
+#op {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(250,246,245,0.94);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  padding: 40px;
+  display: none;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  overflow: auto;
+}
+#op.open { display: grid; }
+#op h2 { font-size: 12px; font-weight: 400; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-lo); margin-bottom: 14px; }
+#op section { min-width: 0; }
+#op pre {
+  font-family: var(--font-mono);
+  font-size: 12px; line-height: 1.7; color: var(--ink-lo);
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 40vh; overflow: auto;
+}
+#op label { display: block; font-size: 12px; color: var(--ink-lo); margin: 14px 0 6px; }
+#op select, #op button {
+  font: inherit; font-size: 13px; font-weight: 400;
+  width: 100%; padding: 10px 13px; border-radius: 12px;
+  color: var(--ink-hi); background: rgba(255,255,255,0.7);
+  border: 1px solid var(--glass-line); cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+#op button { margin-top: 10px; }
+#op button:hover, #op select:hover { background: #fff; }
+#op select:focus-visible, #op button:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(180,134,220,0.18); }
+#op .hint { font-size: 12px; color: var(--ink-lo); margin-top: 10px; line-height: 1.6; }
+#op .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--ink-lo); }
+#op .check input { width: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>
 </head>
 <body>
 
-<div class="header">
-    <div>
-        <div class="title">NICKII AI</div>
-        <div class="subtitle">BACKEND CONTROL PANEL</div>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div id="grain"></div>
+
+<div id="shell">
+  <div id="rail">
+    <div class="wordmark">Nickii<span class="ai">AI</span></div>
+
+    <div id="preview-wrap">
+      <video id="preview" autoplay playsinline muted></video>
+      <div id="preview-none">feed not running</div>
     </div>
-    <div class="hright">
-        <div style="font-size:12px"><span class="conn-dot" id="cdot"></span><span id="cstat">OFFLINE</span></div>
-        <div style="font-size:11px;color:#00aa2e;margin-top:4px" id="uptime">UPTIME: 00:00</div>
+
+    <div class="rows">
+      <div class="row"><i class="dot" id="d-link"></i>link<b id="v-link">offline</b></div>
+      <div class="row"><i class="dot" id="d-feed"></i>outgoing<b id="v-feed">off</b></div>
+      <div class="row"><i class="dot" id="d-mon"></i>monitor<b id="v-mon">off</b></div>
+      <div class="row"><i class="dot" id="d-view"></i>iPad<b id="v-view">0</b></div>
     </div>
+
+    <div id="monitor">
+      <div id="meter"><div id="meter-fill"></div></div>
+      <button id="mute" type="button">monitor on, click to mute</button>
+    </div>
+  </div>
+
+  <div id="stream">
+    <div id="latest"><div id="empty">Waiting.</div></div>
+    <div id="history"></div>
+  </div>
 </div>
 
-<div class="grid-3">
-    <div class="panel stat"><div class="panel-title">Viewers Online</div><div class="stat-val" id="viewerCount">0</div><div class="stat-label">CONNECTED</div></div>
-    <div class="panel stat"><div class="panel-title">Prompts</div><div class="stat-val" id="promptCount">0</div><div class="stat-label">RECEIVED</div></div>
-    <div class="panel stat"><div class="panel-title">Client Audio</div><div class="stat-val" id="audioStat" style="font-size:18px;padding-top:8px;color:#8a6dff">OFF</div><div class="stat-label">STATUS</div></div>
+<!-- Her earpiece. Routed through Web Audio so the meter, the tick and the
+     mute all land on the same output device. -->
+<audio id="earpiece" autoplay></audio>
+<audio id="pull" autoplay muted></audio>
+
+<div id="op">
+  <section>
+    <h2>Picture</h2>
+    <pre id="op-picture">…</pre>
+    <h2>Health</h2>
+    <pre id="op-health">…</pre>
+    <label for="op-out">Earpiece output</label>
+    <select id="op-out"></select>
+    <label for="op-vid">Outgoing video</label>
+    <select id="op-vid"></select>
+    <label for="op-aud">Outgoing audio</label>
+    <select id="op-aud"></select>
+    <button id="op-apply" type="button">Apply devices and restart feed</button>
+    <div class="check">
+      <input type="checkbox" id="op-duck">
+      <label for="op-duck" style="margin:0">Duck earpiece 12 dB while my outgoing audio is hot</label>
+    </div>
+    <p class="hint">Build the duck into the show only if rehearsal shows a distracting self echo. Off by default.</p>
+  </section>
+  <section>
+    <h2>Log</h2>
+    <pre id="op-log">…</pre>
+    <button id="op-offer" type="button">Restart offer</button>
+    <button id="op-clear" type="button">Clear cached offer</button>
+    <p class="hint">Cmd+. closes this panel. It is never visible by default, so the screen stays clean if the audience glimpses it.</p>
+  </section>
 </div>
 
-<div class="panel stat" style="margin-bottom:16px;text-align:center;"><div class="panel-title">Stream Status</div><div class="stat-val" id="streamStat" style="font-size:18px;padding-top:8px">IDLE</div><div class="stat-label">CURRENT</div></div>
-
-<div class="grid">
-    <!-- Video preview -->
-    <div class="video-panel">
-        <div class="panel-title">Video Preview</div>
-        <div class="video-wrap">
-            <video id="localVideo" autoplay playsinline muted></video>
-            <div class="vid-placeholder" id="vidph">[ NO SIGNAL ]</div>
-        </div>
-    </div>
-
-    <!-- Incoming Prompts (moved here and made larger) -->
-    <div class="panel">
-        <div class="panel-title">Incoming Prompts</div>
-        <div class="prompts" id="prompts"><div class="empty">Waiting for prompts...</div></div>
-    </div>
-</div>
-
-<div class="grid-prompts">
-    <!-- Stream Controls (moved here and made larger) -->
-    <div class="panel">
-        <div class="panel-title">Stream Controls</div>
-        <div class="controls">
-            <div>
-                <label>Video Source</label>
-                <select id="videoSrc"></select>
-            </div>
-            <div>
-                <label>Audio Source (Microphone)</label>
-                <select id="audioSrc"></select>
-            </div>
-            <button class="btn" id="startBtn" onclick="startStream()">► START CAMERA + MIC</button>
-            <button class="btn stop" id="stopBtn" onclick="stopStream()" style="display:none">■ STOP STREAM</button>
-        </div>
-    </div>
-    
-    <!-- System log -->
-    <div class="panel">
-        <div class="panel-title">System Log</div>
-        <div class="log" id="log"></div>
-    </div>
-</div>
-
+<script src="/shared.js"></script>
 <script>
-// ── State ──
-let ws, pc, localStream;
-let viewers = 0, prompts = 0, startTime = null;
-let streaming = false;
+'use strict';
 
-// ── Log ──
-function log(msg, type='') {
-    const el = document.getElementById('log');
-    const t = new Date().toLocaleTimeString();
-    el.innerHTML += `<div class="${type}">[${t}] ${msg}</div>`;
-    el.scrollTop = el.scrollHeight;
+// NICKII AI, controller. Section 10 of NICKIIAI.md.
+//
+// This page publishes her outgoing feed (OBS Virtual Camera + BlackHole) to the
+// iPad, answers the iPad's monitor feed into her earpiece, and shows the PTT
+// transcripts as discrete finished messages.
+//
+// There is no reply composer and no synthesis. She answers with her own voice,
+// live, on the outgoing audio track. All image and sound editing happens in OBS
+// via her foot pedals; this page only consumes the two virtual devices.
+
+var CFG = window.NickiiNet.DEFAULTS;
+var net = null;
+
+var localStream = null;
+var pc = null;              // outgoing to viewers
+var monitorPc = null;       // incoming room audio
+var pendingMonIce = [];
+
+var actx = null, monGain = null, tickGain = null, monAnalyser = null, earDest = null;
+var silentSink = null, monSource = null, outSource = null, outAnalyser = null;
+var muted = false, duckEnabled = false;
+
+var chosen = { video: null, audio: null, output: null };
+var messages = [];
+
+var el = function (id) { return document.getElementById(id); };
+
+// ------------------------------------------------------------ status
+function setDot(id, on, text) {
+  el('d-' + id).classList.toggle('on', !!on);
+  if (text !== undefined) el('v-' + id).textContent = text;
 }
 
-// ── Uptime ──
-setInterval(() => {
-    if (startTime) {
-        const s = Math.floor((Date.now()-startTime)/1000);
-        const m = Math.floor(s/60).toString().padStart(2,'0');
-        const ss = (s%60).toString().padStart(2,'0');
-        document.getElementById('uptime').textContent = `UPTIME: ${m}:${ss}`;
-    }
-}, 1000);
+// ------------------------------------------------------------ boot
+window.NickiiNet.loadConfig().then(function (cfg) {
+  CFG = cfg;
+  buildEarpieceGraph();
+  connect();
+  return startFeed();
+}).catch(function (err) {
+  console.warn('boot', err);
+});
 
-// ── Populate device lists ──
-async function loadDevices() {
+function connect() {
+  net = window.NickiiNet.createSocket({
+    role: 'controller',
+    config: CFG,
+    onOpen: function () {
+      setDot('link', true, 'online');
+      reportFeed();
+      reportMonitor();
+      if (localStream) createAndSendOffer();
+    },
+    onClose: function () { setDot('link', false, 'offline'); },
+    onJson: onMessage,
+    onStale: function () { if (localStream) createAndSendOffer(); },
+    onDead: function () { location.reload(); }
+  });
+}
+
+function onMessage(data) {
+  switch (data.type) {
+    case 'viewer-count': setDot('view', data.count > 0, String(data.count)); break;
+    case 'request-offer': if (localStream) createAndSendOffer(); break;
+    case 'webrtc-answer': handleAnswer(data.answer); break;
+    case 'webrtc-ice-candidate': addOutIce(data.candidate); break;
+    case 'prompt': addMessage(data); break;
+    case 'return-feed-offer': handleMonitorOffer(data.offer); break;
+    case 'return-feed-ice': addMonitorIce(data.candidate); break;
+  }
+}
+
+function rtcConfig() { return { iceServers: CFG.iceServers || [] }; }
+
+// ------------------------------------------------------------ outgoing feed
+// Video from OBS Virtual Camera, audio from BlackHole (OBS audio monitoring),
+// matched by label substring. No browser side processing on the audio: it is a
+// program feed, not a microphone.
+function matchDevice(devices, kind, needle) {
+  if (!needle) return null;
+  var n = needle.toLowerCase();
+  var hit = devices.filter(function (d) { return d.kind === kind && (d.label || '').toLowerCase().indexOf(n) !== -1; })[0];
+  return hit ? hit.deviceId : null;
+}
+
+function startFeed() {
+  // Labels are only populated once permission has been granted at least once.
+  return navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then(function (probe) {
+      probe.getTracks().forEach(function (t) { t.stop(); });
+      return navigator.mediaDevices.enumerateDevices();
+    })
+    .then(function (devices) {
+      fillPickers(devices);
+      var pref = CFG.preferredDevices || {};
+      if (!chosen.video) chosen.video = matchDevice(devices, 'videoinput', pref.video);
+      if (!chosen.audio) chosen.audio = matchDevice(devices, 'audioinput', pref.audio);
+      return acquire();
+    })
+    .catch(function (err) {
+      console.warn('device error', err);
+      el('preview-none').textContent = 'device error: ' + (err && err.name);
+    });
+}
+
+function acquire() {
+  // Ask for the resolution explicitly. Without this the browser hands back its
+  // own default, which is 640x480, and the iPad then upscales that three or
+  // four times to fill the screen. That is what a soft, pixelated picture
+  // actually is, and no amount of sharpening on the iPad recovers detail that
+  // was never captured here.
+  var cap = CFG.capture || {};
+  var video = {
+    width: { ideal: cap.width || 1920 },
+    height: { ideal: cap.height || 1080 },
+    frameRate: { ideal: cap.frameRate || 30 }
+  };
+  if (chosen.video) video.deviceId = { exact: chosen.video };
+
+  var audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+  if (chosen.audio) audio.deviceId = { exact: chosen.audio };
+
+  return navigator.mediaDevices.getUserMedia({ video: video, audio: audio })
+    .catch(function () {
+      // Fall back to whatever exists, so a missing virtual device never leaves
+      // the iPad with a dead screen.
+      return navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    })
+    .then(function (stream) {
+      if (localStream) localStream.getTracks().forEach(function (t) { t.stop(); });
+      localStream = stream;
+      el('preview').srcObject = stream;
+      el('preview-none').classList.add('hidden');
+
+      stream.getVideoTracks().forEach(function (t) {
+        // Tell the encoder this is a face holding still, not motion: it should
+        // spend its budget on resolution rather than frame rate.
+        try { t.contentHint = 'detail'; } catch (e) {}
+      });
+
+      stream.getTracks().forEach(function (t) {
+        t.onended = function () { reportFeed(); reacquire(); };
+        t.onmute = reportFeed;
+        t.onunmute = reportFeed;
+      });
+
+      watchOutgoingLevel(stream);
+      reportFeed();
+      createAndSendOffer();
+    });
+}
+
+// What we actually got, which is not always what we asked for. Shown in the
+// operator panel so a soft picture can be diagnosed in seconds.
+function captureSummary() {
+  if (!localStream) return 'no feed';
+  var t = localStream.getVideoTracks()[0];
+  if (!t) return 'no video track';
+  var s = t.getSettings ? t.getSettings() : {};
+  return (s.width || '?') + ' x ' + (s.height || '?')
+    + ' at ' + Math.round(s.frameRate || 0) + ' fps'
+    + '   ' + (t.label || '');
+}
+
+var reacquireTimer = null;
+function reacquire() {
+  // OBS scene switches do not drop the virtual devices, but quitting or
+  // restarting OBS does. Keep trying until it comes back.
+  clearTimeout(reacquireTimer);
+  reacquireTimer = setTimeout(function () {
+    acquire().catch(function () { reacquire(); });
+  }, 2000);
+}
+
+function createAndSendOffer() {
+  if (!localStream || !net) return;
+  if (pc) { try { pc.close(); } catch (e) {} }
+  pc = new RTCPeerConnection(rtcConfig());
+
+  localStream.getTracks().forEach(function (t) { pc.addTrack(t, localStream); });
+
+  pc.onicecandidate = function (ev) {
+    if (ev.candidate) net.send({ type: 'webrtc-ice-candidate', candidate: ev.candidate, target: 'viewer' });
+  };
+  pc.onconnectionstatechange = function () {
+    if (pc.connectionState === 'failed') createAndSendOffer();
+  };
+
+  pc.createOffer().then(function (offer) {
+    return pc.setLocalDescription(offer).then(function () {
+      tuneVideoSender();
+      net.send({ type: 'webrtc-offer', offer: offer });
+    });
+  }).catch(function (err) { console.warn('offer error', err); });
+}
+
+// This is a private LAN with no uplink, so there is no reason to be frugal.
+// Left alone, WebRTC assumes a hostile internet and quietly trades her
+// resolution away to protect frame rate, which on a still face is exactly the
+// wrong trade. Hold the resolution and spend the bandwidth on picture.
+function tuneVideoSender() {
+  if (!pc || !pc.getSenders) return;
+  var cap = CFG.capture || {};
+  pc.getSenders().forEach(function (s) {
+    if (!s.track || s.track.kind !== 'video' || !s.getParameters) return;
     try {
-        await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const vs = document.getElementById('videoSrc');
-        const as = document.getElementById('audioSrc');
-        vs.innerHTML = ''; as.innerHTML = '';
-        devices.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.deviceId;
-            opt.text = d.label || d.deviceId.slice(0,20);
-            if (d.kind === 'videoinput') vs.appendChild(opt);
-            if (d.kind === 'audioinput') as.appendChild(opt);
-        });
-        // Pre-select OBS and BlackHole if available
-        [...vs.options].forEach(o => { if (o.text.toLowerCase().includes('obs')) vs.value = o.value; });
-        [...as.options].forEach(o => { if (o.text.toLowerCase().includes('blackhole') || o.text.toLowerCase().includes('aggregate')) as.value = o.value; });
-        log('Devices loaded', 'ok');
-    } catch(e) { log('Device error: '+e.message, 'err'); }
-}
-loadDevices();
-
-// ── WebSocket ──
-function connectWS() {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${location.host}`);
-
-    ws.onopen = () => {
-        ws.send(JSON.stringify({ type:'register-controller' }));
-        document.getElementById('cdot').classList.add('live');
-        document.getElementById('cstat').textContent = 'ONLINE';
-        startTime = Date.now();
-        log('Server connected', 'ok');
-    };
-
-    ws.onmessage = (e) => {
-        const d = JSON.parse(e.data);
-        if (d.type === 'viewer-count')      { viewers = d.count; document.getElementById('viewerCount').textContent = d.count; }
-        if (d.type === 'request-offer')     { if (streaming) createAndSendOffer(); }
-        if (d.type === 'webrtc-answer')     handleAnswer(d.answer);
-        if (d.type === 'webrtc-ice-candidate') addIce(d.candidate);
-        if (d.type === 'prompt')            addPrompt(d.text, d.timestamp);
-        if (d.type === 'return-feed-offer') handleReturnOffer(d.offer);
-        if (d.type === 'return-feed-ice')   addReturnIce(d.candidate);
-    };
-
-    ws.onclose = () => {
-        document.getElementById('cdot').classList.remove('live');
-        document.getElementById('cstat').textContent = 'OFFLINE';
-        log('Server disconnected — reconnecting...', 'err');
-        setTimeout(connectWS, 3000);
-    };
-}
-connectWS();
-
-// ── Start stream ──
-async function startStream() {
-    try {
-        const vid = document.getElementById('videoSrc').value;
-        const aud = document.getElementById('audioSrc').value;
-        localStream = await navigator.mediaDevices.getUserMedia({
-            video: vid ? { deviceId:{ exact:vid } } : true,
-            audio: aud ? { deviceId:{ exact:aud } } : true
-        });
-
-        // Show preview
-        const lv = document.getElementById('localVideo');
-        lv.srcObject = localStream;
-        lv.classList.add('on');
-        document.getElementById('vidph').classList.add('off');
-
-        document.getElementById('startBtn').style.display = 'none';
-        document.getElementById('stopBtn').style.display  = 'block';
-        document.getElementById('streamStat').textContent = 'LIVE';
-        streaming = true;
-        log('Stream started', 'ok');
-        await createAndSendOffer();
-    } catch(e) {
-        log('Start error: '+e.message, 'err');
-    }
+      var p = s.getParameters();
+      if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+      p.encodings[0].maxBitrate = cap.maxBitrate || 12000000;
+      p.encodings[0].maxFramerate = cap.frameRate || 30;
+      p.encodings[0].scaleResolutionDownBy = 1;
+      p.degradationPreference = 'maintain-resolution';
+      s.setParameters(p).catch(function (e) { console.warn('sender params', e); });
+    } catch (e) { console.warn('sender params', e); }
+  });
 }
 
-// ── Create WebRTC offer ──
-async function createAndSendOffer() {
-    const cfg = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
-    pc = new RTCPeerConnection(cfg);
-
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-    pc.onicecandidate = (e) => {
-        if (e.candidate) ws.send(JSON.stringify({ type:'webrtc-ice-candidate', candidate:e.candidate, target:'viewer' }));
-    };
-
-    pc.onconnectionstatechange = () => {
-        log('Connection: '+pc.connectionState, pc.connectionState==='connected'?'ok':'');
-    };
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    ws.send(JSON.stringify({ type:'webrtc-offer', offer }));
-    log('Offer sent to viewers', 'ok');
+function handleAnswer(answer) {
+  if (!pc || !answer) return;
+  if (pc.signalingState !== 'have-local-offer') return;
+  pc.setRemoteDescription(new RTCSessionDescription(answer)).catch(function (err) {
+    console.warn('answer error', err);
+  });
 }
 
-async function handleAnswer(answer) {
-    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer)).catch(e=>log('Answer err:'+e.message,'err'));
+function addOutIce(c) {
+  if (c && pc) pc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {});
 }
 
-async function addIce(c) {
-    if (c && pc) await pc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
+function reportFeed() {
+  var v = false, a = false;
+  if (localStream) {
+    localStream.getVideoTracks().forEach(function (t) { if (t.readyState === 'live' && !t.muted) v = true; });
+    localStream.getAudioTracks().forEach(function (t) { if (t.readyState === 'live' && !t.muted) a = true; });
+  }
+  setDot('feed', v && a, v && a ? 'live' : (v || a ? 'partial' : 'off'));
+  if (net) net.send({ type: 'feed-status', video: v, audio: a });
 }
 
-// ── Stop stream ──
-function stopStream() {
-    if (localStream) localStream.getTracks().forEach(t => t.stop());
-    if (pc) { pc.close(); pc = null; }
-    const lv = document.getElementById('localVideo');
-    lv.srcObject = null; lv.classList.remove('on');
-    document.getElementById('vidph').classList.remove('off');
-    document.getElementById('startBtn').style.display = 'block';
-    document.getElementById('stopBtn').style.display  = 'none';
-    document.getElementById('streamStat').textContent = 'IDLE';
-    streaming = false;
-    log('Stream stopped', 'err');
+// ------------------------------------------------------------ earpiece graph
+// source -> monGain (mute + duck) -> analyser -> MediaStreamDestination -> <audio>
+// The tick joins after the mute gain, so she still hears messages land while
+// the monitor is muted. setSinkId on the element keeps everything on the
+// earpiece and off the Mac speakers.
+function buildEarpieceGraph() {
+  var Ctx = window.AudioContext || window.webkitAudioContext;
+  actx = new Ctx();
+  monGain = actx.createGain();
+  tickGain = actx.createGain();
+  monAnalyser = actx.createAnalyser();
+  monAnalyser.fftSize = 2048;
+  monAnalyser.smoothingTimeConstant = 0.7;
+  earDest = actx.createMediaStreamDestination();
+
+  // Measurement only nodes still need a path to a destination to be pulled.
+  // Zero gain, so her own voice never reaches the Mac speakers.
+  silentSink = actx.createGain();
+  silentSink.gain.value = 0;
+  silentSink.connect(actx.destination);
+
+  monGain.connect(monAnalyser);
+  monAnalyser.connect(earDest);
+  tickGain.connect(earDest);
+
+  el('earpiece').srcObject = earDest.stream;
+  el('earpiece').play().catch(function () {});
+  requestAnimationFrame(meterLoop);
 }
 
-// ── Return feed (viewer webcam) ──
-let returnPc;
-async function handleReturnOffer(offer) {
-    const cfg = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
-    returnPc = new RTCPeerConnection(cfg);
-    returnPc.onicecandidate = (e) => {
-        if (e.candidate) ws.send(JSON.stringify({ type:'return-feed-ice', candidate:e.candidate, target:'viewer' }));
-    };
-    await returnPc.setRemoteDescription(new RTCSessionDescription(offer));
-    const ans = await returnPc.createAnswer();
-    await returnPc.setLocalDescription(ans);
-    ws.send(JSON.stringify({ type:'return-feed-answer', answer:ans, target:'viewer' }));
-}
-async function addReturnIce(c) {
-    if (c && returnPc) await returnPc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
+function handleMonitorOffer(offer) {
+  if (monitorPc) { try { monitorPc.close(); } catch (e) {} }
+  pendingMonIce = [];
+  monitorPc = new RTCPeerConnection(rtcConfig());
+
+  monitorPc.ontrack = function (ev) {
+    var stream = ev.streams[0];
+    // Chrome will not pull a remote stream into Web Audio unless it is also
+    // attached to a media element. This one stays muted.
+    el('pull').srcObject = stream;
+    // Renegotiation (an ICE restart from the iPad) lands here again, so drop
+    // the previous source instead of stacking nodes across a six hour show.
+    if (monSource) { try { monSource.disconnect(); } catch (e) {} }
+    monSource = actx.createMediaStreamSource(stream);
+    monSource.connect(monGain);
+    if (actx.state === 'suspended') actx.resume();
+    reportMonitor(true);
+    ev.track.onended = function () { reportMonitor(false); };
+    ev.track.onmute = function () { reportMonitor(false); };
+    ev.track.onunmute = function () { reportMonitor(true); };
+  };
+  monitorPc.onicecandidate = function (ev) {
+    if (ev.candidate) net.send({ type: 'return-feed-ice', candidate: ev.candidate, target: 'viewer' });
+  };
+  monitorPc.onconnectionstatechange = function () {
+    if (monitorPc.connectionState === 'connected') reportMonitor(true);
+    if (monitorPc.connectionState === 'failed' || monitorPc.connectionState === 'disconnected') reportMonitor(false);
+  };
+
+  monitorPc.setRemoteDescription(new RTCSessionDescription(offer)).then(function () {
+    pendingMonIce.splice(0).forEach(function (c) { monitorPc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {}); });
+    return monitorPc.createAnswer();
+  }).then(function (answer) {
+    return monitorPc.setLocalDescription(answer).then(function () {
+      net.send({ type: 'return-feed-answer', answer: answer, target: 'viewer' });
+    });
+  }).catch(function (err) { console.warn('monitor answer error', err); });
 }
 
-// ── Prompts ──
-function addPrompt(text, ts) {
-    prompts++;
-    document.getElementById('promptCount').textContent = prompts;
-    const el = document.getElementById('prompts');
-    const time = new Date(ts).toLocaleTimeString();
-    el.innerHTML = `<div class="prompt-item"><span class="prompt-time">[${time}]</span>${text}</div>` + el.innerHTML.replace('<div class="empty">Waiting for prompts...</div>','');
-    log('Prompt: '+text);
+function addMonitorIce(c) {
+  if (!c || !monitorPc) return;
+  if (!monitorPc.remoteDescription) { pendingMonIce.push(c); return; }
+  monitorPc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {});
 }
+
+var monitorUp = false;
+function reportMonitor(up) {
+  if (up !== undefined) monitorUp = !!up;
+  setDot('mon', monitorUp && !muted, monitorUp ? (muted ? 'muted' : 'live') : 'off');
+  if (net) net.send({ type: 'monitor-status', up: monitorUp });
+}
+
+// ------------------------------------------------------------ meter and duck
+var monBuf = null, outBuf = null, meterSmooth = 0;
+
+function watchOutgoingLevel(stream) {
+  if (!actx) return;
+  if (outSource) { try { outSource.disconnect(); } catch (e) {} outSource = null; }
+  if (!stream.getAudioTracks().length) { outAnalyser = null; return; }
+  outSource = actx.createMediaStreamSource(stream);
+  outAnalyser = actx.createAnalyser();
+  outAnalyser.fftSize = 1024;
+  outAnalyser.smoothingTimeConstant = 0.7;
+  outSource.connect(outAnalyser);
+  outAnalyser.connect(silentSink);   // measurement only, at zero gain
+}
+
+function rmsOf(analyser, buf) {
+  analyser.getByteTimeDomainData(buf);
+  var sum = 0;
+  for (var i = 0; i < buf.length; i++) { var v = (buf[i] - 128) / 128; sum += v * v; }
+  return Math.sqrt(sum / buf.length);
+}
+
+function meterLoop() {
+  requestAnimationFrame(meterLoop);
+  // Nothing to meter until the iPad's audio is actually arriving.
+  if (!monAnalyser || !monSource) return;
+  if (!monBuf) monBuf = new Uint8Array(monAnalyser.fftSize);
+
+  var level = Math.min(1, rmsOf(monAnalyser, monBuf) * 5);
+  meterSmooth += (level - meterSmooth) * (level > meterSmooth ? 0.5 : 0.08);
+  el('meter-fill').style.width = (meterSmooth * 100).toFixed(1) + '%';
+
+  // Optional self echo duck, off unless she turns it on in the operator panel.
+  var target = muted ? 0 : 1;
+  if (!muted && duckEnabled && outAnalyser) {
+    if (!outBuf) outBuf = new Uint8Array(outAnalyser.fftSize);
+    if (rmsOf(outAnalyser, outBuf) > 0.03) target = 0.25;   // about 12 dB down
+  }
+  if (monGain && Math.abs(monGain.gain.value - target) > 0.01) {
+    monGain.gain.setTargetAtTime(target, actx.currentTime, 0.05);
+  }
+}
+
+el('mute').addEventListener('click', function () {
+  muted = !muted;
+  el('mute').classList.toggle('muted', muted);
+  el('mute').textContent = muted ? 'monitor muted, click to listen' : 'monitor on, click to mute';
+  reportMonitor();
+});
+
+// A soft tick when a message lands, so she can keep her eyes off the screen.
+function tick() {
+  if (!actx) return;
+  var o = actx.createOscillator();
+  var g = actx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(880, actx.currentTime);
+  g.gain.setValueAtTime(0, actx.currentTime);
+  g.gain.linearRampToValueAtTime(0.12, actx.currentTime + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.16);
+  o.connect(g); g.connect(tickGain);
+  o.start(); o.stop(actx.currentTime + 0.18);
+}
+
+// ------------------------------------------------------------ messages
+function timeOf(ts) {
+  var d = new Date(ts || Date.now());
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+var MAX_MESSAGES = 200;
+function addMessage(data) {
+  messages.unshift(data);
+  // Only forty are ever rendered. Keeping every message of a six hour show in
+  // memory buys nothing and grows without limit.
+  if (messages.length > MAX_MESSAGES) messages.length = MAX_MESSAGES;
+  var latest = el('latest');
+  latest.innerHTML = '';
+  var meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.textContent = timeOf(data.timestamp) + '   ' + (data.lang || '').toUpperCase();
+  var text = document.createElement('div');
+  text.className = 'text';
+  text.textContent = data.text;
+  latest.appendChild(meta);
+  latest.appendChild(text);
+  latest.classList.remove('fresh');
+  void latest.offsetWidth;
+  latest.classList.add('fresh');
+
+  var hist = el('history');
+  hist.innerHTML = '';
+  messages.slice(1, 40).forEach(function (m) {
+    var row = document.createElement('div');
+    row.className = 'hist';
+    var t = document.createElement('span');
+    t.textContent = timeOf(m.timestamp);
+    row.appendChild(t);
+    row.appendChild(document.createTextNode(m.text));
+    hist.appendChild(row);
+  });
+
+  tick();
+}
+
+// ------------------------------------------------------------ operator panel
+var opOpen = false, opTimer = null;
+
+document.addEventListener('keydown', function (ev) {
+  if (ev.metaKey && ev.key === '.') { ev.preventDefault(); toggleOp(); }
+  if (ev.key === 'Escape' && opOpen) toggleOp();
+});
+
+function toggleOp() {
+  opOpen = !opOpen;
+  el('op').classList.toggle('open', opOpen);
+  clearInterval(opTimer);
+  if (opOpen) { refreshOp(); opTimer = setInterval(refreshOp, 2000); }
+}
+
+function refreshOp() {
+  showPicture();
+  fetch('/health', { cache: 'no-store' }).then(function (r) { return r.json(); })
+    .then(function (h) { el('op-health').textContent = JSON.stringify(h, null, 2); })
+    .catch(function () { el('op-health').textContent = 'health unreachable'; });
+  fetch('/logs/tail?n=40', { cache: 'no-store' }).then(function (r) { return r.text(); })
+    .then(function (t) { el('op-log').textContent = t || 'no log yet'; })
+    .catch(function () {});
+}
+
+// Everything needed to diagnose a soft picture in one place: what OBS gave us,
+// what is actually going out over the wire, and whether the encoder is holding
+// resolution back. qualityLimitationReason is the one that answers it: "cpu"
+// or "bandwidth" means the encoder is shrinking her rather than the capture
+// being wrong.
+var lastRtp = null;
+function showPicture() {
+  var want = CFG.capture || {};
+  var lines = [
+    'asked for  ' + (want.width || 1920) + ' x ' + (want.height || 1080) + ' at ' + (want.frameRate || 30) + ' fps',
+    'captured   ' + captureSummary()
+  ];
+  var done = function () { el('op-picture').textContent = lines.join('\n'); };
+  if (!pc || !pc.getStats) return done();
+
+  pc.getStats().then(function (report) {
+    report.forEach(function (s) {
+      if (s.type !== 'outbound-rtp' || s.kind !== 'video') return;
+      lines.push('sending    ' + (s.frameWidth || '?') + ' x ' + (s.frameHeight || '?')
+        + ' at ' + Math.round(s.framesPerSecond || 0) + ' fps');
+      if (lastRtp && s.bytesSent > lastRtp.bytes && s.timestamp > lastRtp.t) {
+        lines.push('bitrate    ' + Math.round((s.bytesSent - lastRtp.bytes) * 8 / (s.timestamp - lastRtp.t)) + ' kbit/s');
+      }
+      lastRtp = { bytes: s.bytesSent, t: s.timestamp };
+      lines.push('limited by ' + (s.qualityLimitationReason || 'none'));
+      if (s.encoderImplementation) lines.push('encoder    ' + s.encoderImplementation);
+    });
+    done();
+  }).catch(done);
+}
+
+function fillPickers(devices) {
+  var fill = function (sel, kind, current) {
+    sel.innerHTML = '';
+    devices.filter(function (d) { return d.kind === kind; }).forEach(function (d) {
+      var o = document.createElement('option');
+      o.value = d.deviceId;
+      o.textContent = d.label || d.deviceId.slice(0, 18);
+      if (d.deviceId === current) o.selected = true;
+      sel.appendChild(o);
+    });
+  };
+  fill(el('op-vid'), 'videoinput', chosen.video);
+  fill(el('op-aud'), 'audioinput', chosen.audio);
+  fill(el('op-out'), 'audiooutput', chosen.output);
+}
+
+el('op-apply').addEventListener('click', function () {
+  chosen.video = el('op-vid').value || null;
+  chosen.audio = el('op-aud').value || null;
+  acquire().catch(function (e) { console.warn(e); });
+});
+
+el('op-out').addEventListener('change', function () {
+  chosen.output = el('op-out').value;
+  var ear = el('earpiece');
+  if (ear.setSinkId) ear.setSinkId(chosen.output).catch(function (e) { console.warn('sinkId', e); });
+});
+
+el('op-duck').addEventListener('change', function () { duckEnabled = el('op-duck').checked; });
+el('op-offer').addEventListener('click', function () { createAndSendOffer(); });
+el('op-clear').addEventListener('click', function () { if (net) net.send({ type: 'clear-cache' }); });
+
+// Some browsers only start an AudioContext after a gesture.
+document.addEventListener('click', function once() {
+  if (actx && actx.state === 'suspended') actx.resume();
+  el('earpiece').play().catch(function () {});
+  document.removeEventListener('click', once);
+});
 </script>
 </body>
 </html>

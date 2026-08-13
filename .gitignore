@@ -9,3 +9,21 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 *.log
+
+# Local HTTPS certificate and key. Never commit these.
+certs/
+
+# Event log. Transcripts are logged here; nothing else is.
+logs/
+
+# Reference images dropped in while designing. Not source.
+# Deliberately not a *.png glob: macOS is case insensitive, so one would also
+# swallow public/icons, and the iPad would install with no Home Screen icon.
+/Firefly_*.png
+/Nickii.png
+/IMG_*.PNG
+/IMG_*.png
+
+# Probe pages written into public/ by the tests and deleted again. If a run is
+# interrupted one can survive, and it must never be committed.
+public/_*.html

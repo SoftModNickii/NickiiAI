@@ -1,17 +1,33 @@
 {
   "name": "nickii-ai",
-  "version": "1.0.0",
-  "description": "NICKII AI - Professional WebRTC streaming system with real-time viewer interaction and AI aesthetic",
+  "version": "2.0.0",
+  "description": "NICKII AI, a two device performance installation. The visitor believes they are talking to an AI. In reality, Nickii is the AI, live.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "whisper": "./scripts/start-whisper.sh",
+    "dns": "sudo node scripts/dns.js",
+    "setup:https": "./scripts/setup-https.sh",
+    "setup:port443": "sudo ./scripts/setup-port443.sh",
+    "icons": "node scripts/make-icons.js",
+    "health": "curl -sk https://nickii.ai/health || curl -sk https://nickii.ai:8443/health",
+    "test": "node tests/resampler.js && node tests/protocol.js && node tests/pages.js && node tests/layout.js",
+    "test:proto": "node tests/protocol.js",
+    "test:layout": "node tests/layout.js",
+    "test:pages": "node tests/pages.js"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
-  "keywords": ["webrtc", "streaming", "obs", "websocket", "ai", "realtime"],
-  "author": "",
+  "keywords": [
+    "webrtc",
+    "installation",
+    "performance",
+    "whisper",
+    "ars-electronica"
+  ],
+  "author": "Nickii Schamborski",
   "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
