@@ -85,6 +85,25 @@ printf "\n${bold}Starting NICKII AI${off}\n\n"
 
 command -v node >/dev/null || { bad "node is not installed"; exit 1; }
 
+# ---------------------------------------------------------------- certificate
+# The Mac's address changes every time she moves network, and the certificate
+# is issued for a fixed list of addresses. When they disagree the iPad gets a
+# name mismatch and simply never loads, with nothing on either screen saying
+# why. This has cost a whole afternoon twice. Reissue it before it can.
+CURRENT_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo '')"
+if [ -n "$CURRENT_IP" ] && [ -f certs/nickii.local.pem ]; then
+  if ! openssl x509 -in certs/nickii.local.pem -noout -text 2>/dev/null \
+       | grep -q "IP Address:${CURRENT_IP}\b"; then
+    warn "this Mac is now $CURRENT_IP, which the certificate does not cover"
+    note "reissuing, the iPad does not need to trust anything again"
+    ./scripts/setup-https.sh </dev/null >/dev/null 2>&1 \
+      && ok "certificate reissued for $CURRENT_IP" \
+      || bad "could not reissue, run ./scripts/setup-https.sh by hand"
+    # The running server is holding the old certificate in memory.
+    listening "$PORT" && { pkill -f "node server.js" 2>/dev/null; sleep 1; }
+  fi
+fi
+
 # ---------------------------------------------------------------- whisper
 if listening "$WHISPER_PORT"; then
   ok "whisper already running"

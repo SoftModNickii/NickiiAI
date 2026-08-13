@@ -73,6 +73,28 @@ Neither survives a reboot, so both belong in the show runbook next to starting O
 Still reachable by name and number as a fallback: `https://nickii.local:8443/` and
 `https://192.168.2.1:8443/`. The certificate covers all of them.
 
+## 4b. Why it will not work on school, cafe or venue Wi-Fi
+
+If the iPad is on the same Wi-Fi as the Mac and still never connects, and the Mac itself looks
+healthy (server up, certificate valid, `/health` answering), the network is almost certainly
+isolating its clients.
+
+Institutional and public networks nearly always switch on **AP isolation** (also called client
+isolation or guest mode). Devices can reach the internet but not each other. The iPad has no
+route to the Mac at all, and nothing on either screen says so: the page simply never loads.
+
+Two tells, both visible from the Mac:
+
+- the netmask is huge, `255.255.240.0` or wider, meaning thousands of clients on one network
+- `/health` reports `viewerCount: 0` forever while everything else reads green
+
+There is no fix from this side. You cannot turn off someone else's isolation. **Use a network
+you control**, which is the whole reason locked decision 1 exists.
+
+Quickest option away from the studio, needing no hardware: **an iPhone personal hotspot**. Join
+the Mac and the iPad to it. Hotspots do not isolate their clients. Then run the launcher, which
+will notice the Mac's address has changed and reissue the certificate on its own.
+
 ## 5. Fallback ladder
 
 1. Small travel router (GL.iNet class) hosting the private network. The Mac keeps the same
