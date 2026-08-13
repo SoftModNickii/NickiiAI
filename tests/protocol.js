@@ -269,6 +269,26 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await wait(140);
     check('typed prompts still relay', ctrl.got('prompt').pop().text === 'typed message');
 
+    // ---- the iPad reporting on itself, and being reloaded from her side
+    v1.send({ type: 'viewer-status', fps: 29.8, render: 'webgl', source: '1920x1080',
+              incoming: 'connected', monitor: 'connected', mic: 'live',
+              muted: false, ui: 'idle', wakeLock: true });
+    await wait(140);
+    const vs = ctrl.last('viewer-status');
+    check('the iPad status reaches the controller', vs && vs.fps === 29.8 && vs.render === 'webgl');
+    const h2 = JSON.parse((await get('/health')).body);
+    check('health carries the iPad status', h2.viewer && h2.viewer.fps === 29.8);
+
+    ctrl.send({ type: 'reload-viewer' });
+    await wait(140);
+    check('reload reaches the iPad', v1.got('reload-viewer').length === 1);
+    check('and reaches every viewer', v2.got('reload-viewer').length === 1);
+
+    // A viewer must not be able to reload other viewers.
+    v1.send({ type: 'reload-viewer' });
+    await wait(140);
+    check('a viewer cannot reload the others', v2.got('reload-viewer').length === 1);
+
     // ---- teardown
     v2.ws.close();
     await wait(260);

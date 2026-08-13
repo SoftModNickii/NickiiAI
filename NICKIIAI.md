@@ -140,7 +140,7 @@ Preserve the existing signaling protocol exactly, then extend it.
 5. **Status endpoint.** `GET /health`: uptime, controller connected, viewer count, whisper reachable, monitor feed up (controller reports via `{"type":"monitor-status","up":true|false}`), outgoing feed up (controller reports via `{"type":"feed-status","video":true,"audio":true}`), last transcript age.
 6. **Logging.** One line per event to `logs/nickii-YYYYMMDD.log`. Transcripts are logged; **neither the monitor feed nor the outgoing A/V is ever recorded anywhere**.
 
-**Protocol summary:** all existing types unchanged, plus `hb`, `hb-ack`, `ptt-start`, `ptt-end`, `ptt-cancel`, `transcript`, `monitor-status`, `feed-status`. Binary frames exist in one direction only: viewer to server, PCM chunks during a PTT session.
+**Protocol summary:** all existing types unchanged, plus `hb`, `hb-ack`, `ptt-start`, `ptt-end`, `ptt-cancel`, `transcript`, `monitor-status`, `feed-status`, `viewer-status`, `reload-viewer`. Binary frames exist in one direction only: viewer to server, PCM chunks during a PTT session.
 
 ## 7. Config (`config.js`)
 
@@ -324,6 +324,29 @@ Rules:
 - **Monitor controls**: a single discreet level meter for incoming room audio and a mute-monitor toggle (mutes only her earpiece, changes nothing on the iPad).
 - **Self-monitoring note**: her own voice returns acoustically from the iPad speaker into the iPad mic; AEC on the iPad removes most of it. If a residual delayed self-echo in her earpiece is distracting during rehearsal, add a simple monitor duck (attenuate the earpiece by 12 dB while her outgoing audio level is hot, measured with an AnalyserNode on her outgoing track). Build this only if rehearsal shows it is needed.
 - Hidden operator panel on `Cmd+.`: `/health` data, device picker, viewer count, whisper status, log tail, restart-offer and clear-cache buttons. Never visible by default; the visible screen stays gallery-clean.
+
+## 10b. Watching the iPad from the other room
+
+The iPad is mounted, in another room, in Guided Access. It cannot be picked up and looked at,
+and a surface that is connected is not necessarily a surface that is well.
+
+**It reports on itself every three seconds** (`viewer-status`, viewer to server to controller):
+frame rate, whether the render pass is running or has fallen back, the resolution actually
+arriving, both peer connection states, the microphone's state, whether it is muted, whether the
+wake lock is held, and which UI state it is in. `/health` carries the last report, and drops it
+after fifteen seconds so a stale one can never be mistaken for a live one.
+
+**Frame rate is the number that matters.** Everything else can read green while the surface runs
+at eight frames a second because the render pass is thermally throttled, and from the other room
+that is invisible. The rail shows it in one quiet line under the iPad row: `30 fps 1920x1080
+idle` when it is well, and the specific fault in amber when it is not (`no render pass, 9.2 fps,
+muted`). Full detail is in the operator panel.
+
+**Reload the iPad** from the operator panel (`reload-viewer`, controller only: a viewer must not
+be able to reload the others). The surface comes back on its own, because the microphone
+permission persists across a reload and the sound choice is remembered, so the audio ritual does
+not reappear in front of a visitor. This is the same path the watchdog already takes on its own
+after `watchdogReloadMs`; this simply lets her take it deliberately.
 
 ## 11. UI design system (both pages share these tokens)
 

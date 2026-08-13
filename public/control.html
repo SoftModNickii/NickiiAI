@@ -49,6 +49,7 @@
      a value has to be read at a glance. */
   --accent: #B486DC;
   --ok: #3E9B6D;
+  --warn-ink: #B4703F;
 
   --font-display: "Archivo", -apple-system, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
@@ -137,6 +138,10 @@ html, body {
 .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(27,26,36,0.16); flex-shrink: 0; transition: background var(--dur-med) ease, box-shadow var(--dur-med) ease; }
 .dot.on { background: var(--ok); box-shadow: 0 0 0 3px rgba(62,155,109,0.16); }
 .row b { font-weight: 400; color: var(--ink-hi); margin-left: auto; font-variant-numeric: tabular-nums; }
+/* One quiet line under the iPad row: enough to know the surface in the other
+   room is well, without turning the rail into a dashboard. */
+.row.sub { font-size: 11px; color: var(--ink-lo); padding-left: 17px; margin-top: -5px; letter-spacing: 0.01em; }
+.row.sub .warn { color: var(--warn-ink); }
 
 /* Monitor: one level meter and one mute toggle. */
 #monitor { display: flex; flex-direction: column; gap: 12px; margin-top: auto; }
@@ -264,6 +269,7 @@ html, body {
       <div class="row"><i class="dot" id="d-feed"></i>outgoing<b id="v-feed">off</b></div>
       <div class="row"><i class="dot" id="d-mon"></i>monitor<b id="v-mon">off</b></div>
       <div class="row"><i class="dot" id="d-view"></i>iPad<b id="v-view">0</b></div>
+      <div class="row sub"><span id="v-ipad">not connected</span></div>
     </div>
 
     <div id="monitor">
@@ -307,6 +313,10 @@ html, body {
     <pre id="op-log">…</pre>
     <button id="op-offer" type="button">Restart offer</button>
     <button id="op-clear" type="button">Clear cached offer</button>
+    <button id="op-reload-ipad" type="button">Reload the iPad</button>
+    <p class="hint">The iPad comes back on its own: the microphone permission
+    persists across a reload and the sound choice is remembered, so it does not
+    ask again. Takes a few seconds.</p>
     <p class="hint">Cmd+. closes this panel. It is never visible by default, so the screen stays clean if the audience glimpses it.</p>
   </section>
 </div>
@@ -377,14 +387,41 @@ function connect() {
 
 function onMessage(data) {
   switch (data.type) {
-    case 'viewer-count': setDot('view', data.count > 0, String(data.count)); break;
+    case 'viewer-count':
+      setDot('view', data.count > 0, String(data.count));
+      if (!data.count) { lastViewer = null; el('v-ipad').textContent = 'not connected'; }
+      break;
     case 'request-offer': if (localStream) createAndSendOffer(); break;
     case 'webrtc-answer': handleAnswer(data.answer); break;
     case 'webrtc-ice-candidate': addOutIce(data.candidate); break;
     case 'prompt': addMessage(data); break;
+    case 'viewer-status': showViewer(data); break;
     case 'return-feed-offer': handleMonitorOffer(data.offer); break;
     case 'return-feed-ice': addMonitorIce(data.candidate); break;
   }
+}
+
+// What the iPad says about itself. Frame rate is the number that matters: a
+// surface can be connected, reporting every field green, and still be running
+// at eight frames a second because the render pass is thermally throttled.
+var lastViewer = null;
+function showViewer(v) {
+  lastViewer = v;
+  var el2 = el('v-ipad');
+  var bad = [];
+  if (v.render !== 'webgl') bad.push('no render pass');
+  if (v.fps < 20) bad.push(v.fps + ' fps');
+  if (v.muted) bad.push('muted');
+  if (v.incoming !== 'connected') bad.push('feed ' + v.incoming);
+  if (v.monitor !== 'connected') bad.push('monitor ' + v.monitor);
+  if (v.mic !== 'live') bad.push('mic ' + v.mic);
+
+  if (bad.length) {
+    el2.innerHTML = '<span class="warn">' + bad.join(', ') + '</span>';
+  } else {
+    el2.textContent = Math.round(v.fps) + ' fps  ' + (v.source || '') + '  ' + v.ui;
+  }
+  el('d-view').classList.toggle('on', bad.length === 0);
 }
 
 function rtcConfig() { return { iceServers: CFG.iceServers || [] }; }
@@ -778,6 +815,22 @@ function showPicture() {
     'asked for  ' + (want.width || 1920) + ' x ' + (want.height || 1080) + ' at ' + (want.frameRate || 30) + ' fps',
     'captured   ' + captureSummary()
   ];
+  if (lastViewer) {
+    lines.push('');
+    lines.push('iPad');
+    lines.push('  frame rate ' + lastViewer.fps + ' fps');
+    lines.push('  render     ' + lastViewer.render);
+    lines.push('  receiving  ' + (lastViewer.source || 'nothing'));
+    lines.push('  feed       ' + lastViewer.incoming);
+    lines.push('  monitor    ' + lastViewer.monitor);
+    lines.push('  microphone ' + lastViewer.mic);
+    lines.push('  sound      ' + (lastViewer.muted ? 'MUTED' : 'on'));
+    lines.push('  wake lock  ' + (lastViewer.wakeLock ? 'held' : 'NOT HELD'));
+    lines.push('  state      ' + lastViewer.ui);
+  } else {
+    lines.push('');
+    lines.push('iPad         not reporting');
+  }
   var done = function () { el('op-picture').textContent = lines.join('\n'); };
   if (!pc || !pc.getStats) return done();
 
@@ -828,6 +881,14 @@ el('op-out').addEventListener('change', function () {
 el('op-duck').addEventListener('change', function () { duckEnabled = el('op-duck').checked; });
 el('op-offer').addEventListener('click', function () { createAndSendOffer(); });
 el('op-clear').addEventListener('click', function () { if (net) net.send({ type: 'clear-cache' }); });
+
+el('op-reload-ipad').addEventListener('click', function () {
+  if (!net) return;
+  net.send({ type: 'reload-viewer' });
+  var b = el('op-reload-ipad'), was = b.textContent;
+  b.textContent = 'Reloading, give it a few seconds';
+  setTimeout(function () { b.textContent = was; }, 6000);
+});
 
 // Some browsers only start an AudioContext after a gesture.
 document.addEventListener('click', function once() {

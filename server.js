@@ -147,6 +147,7 @@ const state = {
   startedAt: Date.now(),
   monitorUp: false,
   feed: { video: false, audio: false },
+  viewer: null,                     // last self report from the iPad
   lastTranscriptAt: null,
   transcriptCount: 0,
   whisperReachable: false,
@@ -182,6 +183,7 @@ function health() {
     whisperCheckedAt: state.whisperCheckedAt,
     monitorFeedUp: state.monitorUp,
     outgoingFeed: { video: state.feed.video, audio: state.feed.audio },
+    viewer: state.viewer && (Date.now() - state.viewer.at < 15000) ? state.viewer : null,
     lastTranscriptAgeMs: state.lastTranscriptAt ? Date.now() - state.lastTranscriptAt : null,
     transcriptCount: state.transcriptCount,
     offerCached: !!cachedOffer,
@@ -533,6 +535,29 @@ wss.on('connection', (ws, req) => {
         resetPtt(ws);
         break;
 
+      // The iPad is in another room, in Guided Access, and cannot be picked
+      // up and looked at. This is the only way to know it is actually well
+      // rather than merely connected.
+      case 'viewer-status':
+        if (ws.role !== 'viewer') break;
+        state.viewer = {
+          at: Date.now(),
+          fps: data.fps, render: data.render, source: data.source,
+          incoming: data.incoming, monitor: data.monitor, mic: data.mic,
+          muted: !!data.muted, ui: data.ui, wakeLock: !!data.wakeLock,
+        };
+        sendToController({ type: 'viewer-status', ...data, timestamp: state.viewer.at });
+        break;
+
+      // Reload the surface from her side. After a reload the page re-acquires
+      // the microphone without a gesture (the permission persists) and the
+      // sound choice is remembered, so it comes back on its own.
+      case 'reload-viewer':
+        if (ws.role !== 'controller') break;
+        log('viewer.reload-requested', { viewers: clients.viewers.size });
+        broadcastToViewers({ type: 'reload-viewer' });
+        break;
+
       case 'monitor-status':
         if (ws.role !== 'controller') break;
         if (state.monitorUp !== !!data.up) log('monitor.status', { up: !!data.up });
@@ -569,6 +594,7 @@ wss.on('connection', (ws, req) => {
     }
 
     if (wasViewer) {
+      if (clients.viewers.size === 0) state.viewer = null;
       log('viewer.disconnect', { remaining: clients.viewers.size });
       sendToController({ type: 'viewer-count', count: clients.viewers.size });
     }

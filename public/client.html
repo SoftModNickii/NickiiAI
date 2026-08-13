@@ -1166,6 +1166,8 @@ function onMessage(data) {
     case 'return-feed-answer': handleMonitorAnswer(data.answer); break;
     case 'return-feed-ice': addMonitorIce(data.candidate); break;
     case 'transcript': showTranscript(data); break;
+    // Asked for from the controller, because she cannot reach the iPad.
+    case 'reload-viewer': location.reload(); break;
   }
 }
 
@@ -1639,9 +1641,11 @@ var Render = (function () {
 
 // One loop: the frames are both the proof the feed is alive and the source
 // for the render, so they are counted and drawn in the same place.
+var frameCount = 0;
 if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
   var onFrame = function () {
     if (net) net.noteFrame();
+    frameCount++;
     Render.draw();
     feedEl.requestVideoFrameCallback(onFrame);
   };
@@ -1654,7 +1658,7 @@ if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
       if (net) net.noteFrame();
     }
   }, 1000);
-  (function loop() { Render.draw(); requestAnimationFrame(loop); })();
+  (function loop() { frameCount++; Render.draw(); requestAnimationFrame(loop); })();
 }
 
 // ------------------------------------------------------------ push to talk
@@ -1903,6 +1907,38 @@ function refreshOps() {
     document.getElementById('ops-body').textContent = lines.concat(['', 'server        NOT ANSWERING']).join('\n');
   });
 }
+
+// ------------------------------------------------------------ self report
+// The iPad is in another room, mounted, in Guided Access. Nobody can pick it
+// up and look at it. Every three seconds it says how it actually is, so the
+// controller can tell a healthy surface from one that is merely connected.
+var lastFrameCount = 0, lastFpsAt = performance.now(), fps = 0;
+
+setInterval(function () {
+  var now = performance.now();
+  fps = Math.round(frameCount - lastFrameCount) / ((now - lastFpsAt) / 1000);
+  lastFrameCount = frameCount;
+  lastFpsAt = now;
+  if (!net || !net.isOpen()) return;
+
+  net.send({
+    type: 'viewer-status',
+    fps: Math.round(fps * 10) / 10,
+    render: body.classList.contains('rendered') ? 'webgl' : 'fallback',
+    source: feedEl.videoWidth ? feedEl.videoWidth + 'x' + feedEl.videoHeight : null,
+    incoming: inPc ? inPc.connectionState : 'none',
+    monitor: monitorPc ? monitorPc.connectionState : 'none',
+    mic: micStream && micStream.getAudioTracks()[0]
+      ? micStream.getAudioTracks()[0].readyState : 'none',
+    muted: !!feedEl.muted,
+    ui: body.classList.contains('listening') ? 'listening'
+      : body.classList.contains('sent') ? 'sent'
+      : body.classList.contains('arriving') ? 'arriving'
+      : body.classList.contains('boot') ? 'boot'
+      : body.classList.contains('wake') ? 'wake' : 'idle',
+    wakeLock: !!wakeLock,
+  });
+}, 3000);
 
 // ------------------------------------------------------------ stay awake
 var wakeLock = null;
