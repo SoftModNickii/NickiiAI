@@ -160,6 +160,41 @@ html, body {
 #mute.muted { color: var(--ink-hi); border-color: rgba(180,134,220,0.5); background: rgba(255,255,255,0.85); }
 #mute:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(180,134,220,0.18); }
 
+/* ------------------------------------------------------------- the gate */
+#gate {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-0);
+}
+body.in #gate { display: none; }
+#gate-form { display: flex; flex-direction: column; gap: 14px; width: 260px; }
+#gate-form .wordmark { margin-bottom: 10px; }
+#gate input, #gate button {
+  font: inherit; font-size: 15px; padding: 13px 16px;
+  border-radius: 14px; border: 1px solid var(--glass-line);
+  background: rgba(255,255,255,0.7); color: var(--ink-hi);
+}
+#gate button { font-weight: 500; cursor: pointer; box-shadow: var(--shadow-soft); }
+#gate input:focus-visible, #gate button:focus-visible {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(180,134,220,0.18);
+}
+#gate-err { font-size: 13px; color: var(--warn-ink); min-height: 1.2em; }
+
+/* --------------------------------------------------------- taking the stage */
+#stage-ctl { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+#stage-ctl button {
+  font: inherit; font-size: 14px; font-weight: 500; text-align: left;
+  padding: 13px 16px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--glass-line); background: rgba(255,255,255,0.7);
+  color: var(--ink-hi); box-shadow: var(--shadow-soft);
+  transition: background var(--dur-fast) ease, opacity var(--dur-fast) ease;
+}
+#stage-ctl button:hover { background: rgba(255,255,255,0.95); }
+#stage-ctl button:disabled { opacity: 0.4; cursor: default; }
+#go-live { border-color: rgba(180,134,220,0.5); }
+#stage-state { font-size: 12px; color: var(--ink-lo); padding-left: 2px; }
+body.live #stage-state { color: var(--ok); }
+
 /* ---------------------------------------------------------- messages */
 #stream {
   position: relative;
@@ -255,6 +290,16 @@ html, body {
 <div class="blob blob-2"></div>
 <div id="grain"></div>
 
+<!-- Anyone who reaches this page could otherwise take the surface. -->
+<div id="gate">
+  <form id="gate-form">
+    <div class="wordmark">NICKII <span class="ai">AI</span></div>
+    <input id="gate-pw" type="password" placeholder="Password" autocomplete="current-password" autofocus>
+    <button type="submit">Take control</button>
+    <p id="gate-err"></p>
+  </form>
+</div>
+
 <div id="shell">
   <div id="rail">
     <div class="wordmark">Nickii<span class="ai">AI</span></div>
@@ -270,6 +315,13 @@ html, body {
       <div class="row"><i class="dot" id="d-mon"></i>monitor<b id="v-mon">off</b></div>
       <div class="row"><i class="dot" id="d-view"></i>iPad<b id="v-view">0</b></div>
       <div class="row sub"><span id="v-ipad">not connected</span></div>
+    </div>
+
+    <!-- The surface is hers only while she says so. -->
+    <div id="stage-ctl">
+      <button id="go-live" type="button">Go live</button>
+      <button id="hand-back" type="button">Hand back to the loop</button>
+      <div id="stage-state">on the loop</div>
     </div>
 
     <div id="monitor">
@@ -359,11 +411,14 @@ function setDot(id, on, text) {
 }
 
 // ------------------------------------------------------------ boot
+// Remembered so she logs in once, not every time the laptop wakes.
+var password = '';
+try { password = localStorage.getItem('nickii-pw') || ''; } catch (e) {}
+
 window.NickiiNet.loadConfig().then(function (cfg) {
   CFG = cfg;
   buildEarpieceGraph();
   connect();
-  return startFeed();
 }).catch(function (err) {
   console.warn('boot', err);
 });
@@ -372,6 +427,7 @@ function connect() {
   net = window.NickiiNet.createSocket({
     role: 'controller',
     config: CFG,
+    register: function () { return { type: 'register-controller', password: password }; },
     onOpen: function () {
       setDot('link', true, 'online');
       reportFeed();
@@ -396,6 +452,9 @@ function onMessage(data) {
     case 'webrtc-ice-candidate': addOutIce(data.candidate); break;
     case 'prompt': addMessage(data); break;
     case 'viewer-status': showViewer(data); break;
+    case 'auth-ok': enter(); break;
+    case 'auth-failed': reject(); break;
+    case 'mode': showMode(data.mode); break;
     case 'return-feed-offer': handleMonitorOffer(data.offer); break;
     case 'return-feed-ice': addMonitorIce(data.candidate); break;
   }
@@ -423,6 +482,47 @@ function showViewer(v) {
   }
   el('d-view').classList.toggle('on', bad.length === 0);
 }
+
+// ---------------------------------------------------------------- the gate
+function enter() {
+  document.body.classList.add('in');
+  try { localStorage.setItem('nickii-pw', password); } catch (e) {}
+  el('gate-err').textContent = '';
+  startFeed();
+}
+
+function reject() {
+  document.body.classList.remove('in');
+  password = '';
+  try { localStorage.removeItem('nickii-pw'); } catch (e) {}
+  el('gate-err').textContent = 'Not that one.';
+  el('gate-pw').value = '';
+  el('gate-pw').focus();
+}
+
+el('gate-form').addEventListener('submit', function (ev) {
+  ev.preventDefault();
+  password = el('gate-pw').value;
+  if (net && net.isOpen()) net.send({ type: 'register-controller', password: password });
+});
+
+// ---------------------------------------------------------- taking the stage
+function showMode(m) {
+  var live = m === 'live';
+  document.body.classList.toggle('live', live);
+  el('go-live').disabled = live;
+  el('hand-back').disabled = !live;
+  el('stage-state').textContent = live
+    ? 'live, the iPad is showing you'
+    : 'on the loop, the iPad is playing the sequences';
+}
+
+el('go-live').addEventListener('click', function () {
+  if (net) net.send({ type: 'go-live' });
+});
+el('hand-back').addEventListener('click', function () {
+  if (net) net.send({ type: 'hand-back' });
+});
 
 function rtcConfig() { return { iceServers: CFG.iceServers || [] }; }
 

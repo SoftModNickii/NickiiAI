@@ -27,3 +27,7 @@ logs/
 # Probe pages written into public/ by the tests and deleted again. If a run is
 # interrupted one can survive, and it must never be committed.
 public/_*.html
+
+# The sequences. Real footage is hundreds of megabytes and does not belong
+# in git; public/video/README.md says what to put there.
+public/video/*.mp4

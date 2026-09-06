@@ -72,6 +72,26 @@ module.exports = {
     maxPixels: 6000000 // drawing buffer ceiling. Lower it only if the iPad runs hot.
   },
 
+  // The installation runs alone. calm loops indefinitely; holding the button
+  // plays one response, in rotation, then returns to calm. Drop the files into
+  // public/video/ and list them here. Section 11d.
+  video: {
+    dir: './public/video',
+    calm: 'calm.mp4',
+    responses: ['response-1.mp4', 'response-2.mp4', 'response-3.mp4', 'response-4.mp4'],
+    // Everything dissolves out through the field and reforms, rather than
+    // cross-fading. It matches how she arrives at boot, and it means one
+    // canvas and one shader pass instead of two.
+    dissolveMs: 900,
+    // The controller gone this long hands the surface back to calm on its own,
+    // so she can simply shut the laptop and walk away.
+    handbackAfterMs: 25000,
+  },
+
+  // Anyone who opens /control becomes the controller. On a permanent network in
+  // a public building that is not acceptable. Override with NICKII_PASSWORD.
+  controlPassword: process.env.NICKII_PASSWORD || 'nickii',
+
   maxUtteranceSeconds: 30,
   heartbeatServerMs: 25000,
   heartbeatClientMs: 20000,

@@ -161,7 +161,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
     // ---- preserved signaling
     const ctrl = await client();
-    ctrl.send({ type: 'register-controller' });
+    ctrl.send({ type: 'register-controller', password: 'nickii' });
     await wait(120);
     check('controller gets viewer-count on register', !!ctrl.last('viewer-count'));
 
@@ -268,6 +268,37 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     v2.send({ type: 'prompt', text: 'typed message' });
     await wait(140);
     check('typed prompts still relay', ctrl.got('prompt').pop().text === 'typed message');
+
+    // ---- loop, response, takeover (11d)
+    const v3 = await client();
+    v3.send({ type: 'register-viewer' });
+    await wait(160);
+    check('a viewer is told which state it joins', v3.last('mode') && v3.last('mode').mode === 'calm');
+    check('config carries the sequences',
+      JSON.parse(cfg.body).video.calm === 'calm.mp4' && JSON.parse(cfg.body).video.responses.length > 0);
+
+    const rogue = await client();
+    rogue.send({ type: 'register-controller', password: 'wrong' });
+    await wait(160);
+    check('a wrong password is refused', !!rogue.last('auth-failed'));
+    rogue.send({ type: 'go-live' });
+    await wait(160);
+    check('and cannot take the surface', JSON.parse((await get('/health')).body).surface === 'calm');
+    rogue.ws.close();
+
+    ctrl.send({ type: 'go-live' });
+    await wait(160);
+    check('going live reaches the iPad', v3.last('mode').mode === 'live');
+    check('health reports the surface live', JSON.parse((await get('/health')).body).surface === 'live');
+
+    v3.send({ type: 'go-live' });
+    await wait(160);
+    check('a viewer cannot take the surface', JSON.parse((await get('/health')).body).surface === 'live');
+
+    ctrl.send({ type: 'hand-back' });
+    await wait(160);
+    check('handing back reaches the iPad', v3.last('mode').mode === 'calm');
+    v3.ws.close();
 
     // ---- the iPad reporting on itself, and being reloaded from her side
     v1.send({ type: 'viewer-status', fps: 29.8, render: 'webgl', source: '1920x1080',

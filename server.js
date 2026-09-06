@@ -85,6 +85,11 @@ app.get('/config.json', (req, res) => {
     preferredDevices: config.preferredDevices,
     capture: config.capture,
     render: config.render,
+    video: {
+      calm: config.video.calm,
+      responses: config.video.responses,
+      dissolveMs: config.video.dissolveMs,
+    },
     // No STUN and no TURN in local mode: same subnet, host candidates only.
     iceServers: IS_LOCAL ? [] : [{ urls: 'stun:stun.l.google.com:19302' }],
   });
@@ -148,6 +153,8 @@ const state = {
   monitorUp: false,
   feed: { video: false, audio: false },
   viewer: null,                     // last self report from the iPad
+  mode: 'calm',                     // 'calm' | 'live'
+  liveSince: null,
   lastTranscriptAt: null,
   transcriptCount: 0,
   whisperReachable: false,
@@ -167,6 +174,18 @@ function broadcastToViewers(data) {
   });
 }
 
+// Back to the loop. Called when she asks, and on its own when the controller
+// has been gone long enough that she has plainly walked away.
+function toCalm(why) {
+  if (state.mode === 'calm') return;
+  state.mode = 'calm';
+  state.liveSince = null;
+  log('mode.calm', { why });
+  broadcastToViewers({ type: 'mode', mode: 'calm' });
+}
+
+let handbackTimer = null;
+
 function sendJson(ws, data) {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
 }
@@ -183,6 +202,8 @@ function health() {
     whisperCheckedAt: state.whisperCheckedAt,
     monitorFeedUp: state.monitorUp,
     outgoingFeed: { video: state.feed.video, audio: state.feed.audio },
+    surface: state.mode,
+    liveForSeconds: state.liveSince ? Math.round((Date.now() - state.liveSince) / 1000) : null,
     viewer: state.viewer && (Date.now() - state.viewer.at < 15000) ? state.viewer : null,
     lastTranscriptAgeMs: state.lastTranscriptAt ? Date.now() - state.lastTranscriptAt : null,
     transcriptCount: state.transcriptCount,
@@ -447,6 +468,7 @@ wss.on('connection', (ws, req) => {
         clients.viewers.add(ws);
         log('viewer.register', { total: clients.viewers.size });
         sendToController({ type: 'viewer-count', count: clients.viewers.size });
+        sendJson(ws, { type: 'mode', mode: state.mode });
 
         // A cached offer means the viewer does not wait for the controller.
         if (cachedOffer) {
@@ -460,12 +482,19 @@ wss.on('connection', (ws, req) => {
         break;
 
       case 'register-controller':
+        if (String(data.password || '') !== String(config.controlPassword)) {
+          log('controller.rejected', { ip: (req.socket.remoteAddress || '').replace(/^::ffff:/, '') });
+          sendJson(ws, { type: 'auth-failed' });
+          break;
+        }
+        sendJson(ws, { type: 'auth-ok' });
         ws.role = 'controller';
         clients.controller = ws;
         cachedOffer = null;
         cachedIceCandidates = [];
         state.monitorUp = false;
         state.feed = { video: false, audio: false };
+        clearTimeout(handbackTimer);
         log('controller.register', {});
         sendToController({ type: 'viewer-count', count: clients.viewers.size });
         break;
@@ -558,6 +587,22 @@ wss.on('connection', (ws, req) => {
         broadcastToViewers({ type: 'reload-viewer' });
         break;
 
+      // She takes the surface. The iPad dissolves out of the loop and into her
+      // live feed; it does not reload, and the visitor sees one movement.
+      case 'go-live':
+        if (ws.role !== 'controller') break;
+        state.mode = 'live';
+        state.liveSince = Date.now();
+        log('mode.live', {});
+        broadcastToViewers({ type: 'mode', mode: 'live' });
+        sendToController({ type: 'mode', mode: 'live' });
+        break;
+
+      case 'hand-back':
+        if (ws.role !== 'controller') break;
+        toCalm('asked');
+        break;
+
       case 'monitor-status':
         if (ws.role !== 'controller') break;
         if (state.monitorUp !== !!data.up) log('monitor.status', { up: !!data.up });
@@ -591,6 +636,12 @@ wss.on('connection', (ws, req) => {
       state.monitorUp = false;
       state.feed = { video: false, audio: false };
       log('controller.disconnect', { note: 'cache cleared' });
+      // She may simply have shut the laptop. Give her a moment to come back
+      // before the surface returns to the loop in front of a visitor.
+      clearTimeout(handbackTimer);
+      handbackTimer = setTimeout(function () {
+        if (!clients.controller) toCalm('controller gone');
+      }, config.video.handbackAfterMs);
     }
 
     if (wasViewer) {

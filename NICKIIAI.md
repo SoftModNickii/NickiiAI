@@ -551,6 +551,65 @@ a permanent WebRTC connection. Everything here is a decision about heat, not abo
 If the iPad ever runs hot in rehearsal, the order to reduce is: `render.maxPixels`, then the
 bloom blur radius, then `capture.maxBitrate`. Her picture is the last thing to give up.
 
+## 11d. Loop, response, takeover
+
+The MacBook cannot stand in the gallery all day. The installation therefore runs on its own and
+she takes it over for about an hour when she performs.
+
+**Four states.** All four pass through the same render pass (9b), so they are visually
+indistinguishable and every transition is a cross-fade rather than a cut.
+
+1. **calm** — a 30 minute sequence, looping, with sound. The default, indefinitely.
+2. **response** — a visitor holds the button and speaks. On release the calm loop fades into one
+   of several 5 minute sequences, chosen in rotation. When it ends it fades back to calm.
+3. **live** — she logs in from the MacBook and takes over. Exactly the system in sections 9 and
+   10: her live face and voice, room audio in her earpiece, push to talk, real transcripts.
+4. **handback** — the controller leaves and the iPad returns to calm on its own.
+
+**Several response sequences, never one.** A visitor who presses twice, or watches someone else
+press, sees the same film restart and the illusion is gone. With four the machine appears to be
+choosing.
+
+**The videos are shot plain and styled on the device.** Head and shoulders, even light, plain
+background, the same framing as the live performance. No baked-in look: the render pass applies
+it live, which is what makes calm, response and live indistinguishable, and means retuning
+`config.render` later moves all of them together.
+
+**Sound is the hard constraint.** All the sequences have sound, and iOS will not play unmuted
+video without a user gesture. Unattended there is nobody to give one. The escape is that WebKit
+permits unmuted playback while the page is capturing, so **the iPad holds the microphone open
+during the loop**. It needs it for the button in any case. Nothing is transmitted or recorded
+while no controller is connected, and section 2 rule 10 still governs disclosure.
+
+**Audio cross-fades with the picture.** Handing over to her live voice must not cut the loop
+off, and handing back must not drop into silence.
+
+## 11e. The hardware, and why the Pi is the installation
+
+| | role | when |
+| --- | --- | --- |
+| Raspberry Pi 4 | access point, server, video store | always on |
+| iPad | the visitor surface | always on |
+| MacBook Pro | OBS, whisper, the controller | only during the live hour |
+| Raspberry Pi 3 | identical spare card, swapped in if the 4 dies | in the bag |
+
+**Eduroam, and any other institutional network, is unusable for the device link.** They isolate
+their clients: the iPad and the Mac can be on the same Wi-Fi and have no route to each other,
+everything reads healthy, and `viewerCount` sits at 0 forever (4b). The Pi runs `hostapd` and
+makes its own network, which is also the only network the exhibition iPad ever knows.
+
+**Whisper stays on the MacBook.** A Pi cannot run `large-v3-turbo` usefully, and it is only
+needed while she is live. During calm and response nothing is transcribed: the button changes
+the video, no text is involved.
+
+**The bandwidth to watch is the live hour only.** Her feed crosses the Pi's Wi-Fi at around
+12 Mbit. Calm and response come off the Pi's own disk and are unaffected. If the link is tight,
+in order: run Ethernet from the MacBook to the Pi so only the iPad is wireless, add a USB Wi-Fi
+dongle to the Pi, or drop `capture.maxBitrate`.
+
+**The controller needs a password.** Today anyone who opens `/control` becomes the controller.
+On a permanent network in a public building that is not acceptable.
+
 ## 12. Reliability engineering
 
 - **Keep everything alive**: `com.nickii.ai.plist` LaunchAgent (`KeepAlive`, `RunAtLoad`) for `node server.js`; the same pattern supervises `start-whisper.sh`. Both self-restart after crash or reboot. OBS itself is started manually as part of the show runbook (it is a performance instrument, not a daemon).

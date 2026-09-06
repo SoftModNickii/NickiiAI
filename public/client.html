@@ -131,6 +131,15 @@ html, body {
 }
 body.feed-live #presence { opacity: 1; }
 
+/* Changing what she is. The surface dissolves out through the field, the
+   source is swapped underneath, and it reforms. Deliberately not a cross-fade:
+   this is how she arrives at boot, so calm, response and live all begin the
+   same way and none of the seams show. */
+body.dissolving #presence,
+body.dissolving #halo { opacity: 0; }
+body.dissolving #pane,
+body.dissolving #invite { opacity: 0; pointer-events: none; }
+
 /* The rendered presence. When WebGL is available the canvas carries the
    picture and the video element stays behind it, playing (it is still the
    source of her voice) but invisible. If WebGL is not available the video
@@ -144,6 +153,20 @@ body.feed-live #presence { opacity: 1; }
 }
 body.rendered #render { display: block; }
 body.rendered #feed { opacity: 0; }
+
+/* The local sequences. Identical treatment to the live feed: the render pass
+   samples whichever of the two is current, so calm, response and live cannot
+   be told apart and every transition is one movement. */
+#player {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0;          /* the canvas carries the picture; this is only a source */
+  pointer-events: none;
+}
 
 #feed {
   width: 100%;
@@ -888,6 +911,7 @@ body.offline #status .dot { background: var(--warn); }
 <div id="field"></div>
 <div id="presence">
   <video id="feed" autoplay playsinline></video>
+  <video id="player" playsinline></video>
   <canvas id="render"></canvas>
 </div>
 <div id="halo"></div>
@@ -1035,6 +1059,24 @@ function setStatus(text) { if (statusEl) statusEl.textContent = text; }
 // then attach the remote stream and play. WebKit permits unmuted playback
 // while the page is actively capturing.
 
+// The surface comes up in two independent halves, deliberately.
+//
+// The loop must play even if the microphone never arrives. It runs alone for
+// days at a time, and an installation showing a blank screen because a
+// permission lapsed overnight is a broken installation. So the connection and
+// the sequences do not wait for capture.
+//
+// Capture is the second half. It buys two things: the button, and unmuted
+// playback, because WebKit only permits that while the page is capturing.
+// Until it succeeds the loop plays muted with the way back on screen.
+function boot() {
+  return window.NickiiNet.loadConfig().then(function (cfg) {
+    CFG = cfg;
+    connect();                    // the server says what to show
+    keepAwake();
+  }).catch(function (err) { console.warn('boot', err); });
+}
+
 function start(fromGesture) {
   if (started) return Promise.resolve();
   return navigator.mediaDevices.getUserMedia({
@@ -1043,21 +1085,20 @@ function start(fromGesture) {
   }).then(function (stream) {
     micStream = stream;
     started = true;
+    try { sessionStorage.setItem('nickii-started', '1'); } catch (e) {}
     return buildAudioGraph();
   }).then(function () {
-    return window.NickiiNet.loadConfig();
-  }).then(function (cfg) {
-    CFG = cfg;
-    connect();
-    // Not idle: idle means ready to be spoken to, and she is not here yet.
-    if (!body.classList.contains('feed-live')) setState('arriving');
-    keepAwake();
-    try { sessionStorage.setItem('nickii-started', '1'); } catch (e) {}
+    if (net && net.isOpen()) openMonitorFeed();
+    // Now that the page is capturing, the sound can come up.
+    if (wantsSound && playerEl && playerEl.muted) {
+      playerEl.muted = false;
+      playerEl.play().then(function () { body.classList.remove('muted'); })
+                     .catch(function () { playerEl.muted = true; });
+    }
+    if (body.classList.contains('boot') || body.classList.contains('wake')) setState('idle');
   }).catch(function (err) {
-    console.warn('start failed', err && err.name, err && err.message);
-    // No permission yet, or a gesture is required. Show the glass invitation
-    // rather than failing silently. If this session had already started once,
-    // we are coming back from a watchdog reload, so it is the wake state.
+    console.warn('microphone unavailable', err && err.name, err && err.message);
+    // The loop keeps running behind this. It is an invitation, not an error.
     var returning = false;
     try { returning = sessionStorage.getItem('nickii-started') === '1'; } catch (e) {}
     setState(returning ? 'wake' : 'boot');
@@ -1095,7 +1136,7 @@ function buildAudioGraph() {
       processorOptions: { targetRate: CFG.sampleRate || 16000 }
     });
     worklet.port.onmessage = function (ev) {
-      if (capturing && net) net.sendBinary(ev.data);
+      if (capturing && mode === 'live' && net) net.sendBinary(ev.data);
     };
     source.connect(worklet);
     worklet.connect(silent);
@@ -1168,6 +1209,7 @@ function onMessage(data) {
     case 'transcript': showTranscript(data); break;
     // Asked for from the controller, because she cannot reach the iPad.
     case 'reload-viewer': location.reload(); break;
+    case 'mode': setMode(data.mode); break;
   }
 }
 
@@ -1322,6 +1364,7 @@ var Render = (function () {
   var canvas = document.getElementById('render');
   var gl = null, prog = null, tex = null, u = {}, live = false, maxPixels = 6000000;
   var glass = { band: 26, lens: 15, chroma: 2.2, on: 1 };
+  var src = document.getElementById('feed');   // whichever video is current
   var paneEl = document.getElementById('pane');   // the glass the pass refracts
 
   var VERT =
@@ -1589,6 +1632,7 @@ var Render = (function () {
   }
 
   return {
+    setSource: function (el) { src = el; },
     start: function () {
       if (live) return true;
       body.classList.add('rendered');       // so the canvas has a size to measure
@@ -1598,17 +1642,17 @@ var Render = (function () {
     },
     draw: function () {
       if (!live || !gl) return;
-      if (!feedEl.videoWidth || feedEl.readyState < 2) return;
+      if (!src || !src.videoWidth || src.readyState < 2) return;
       if (!resize()) return;
 
       // object-fit: cover, done in uv space
-      var va = feedEl.videoWidth / feedEl.videoHeight;
+      var va = src.videoWidth / src.videoHeight;
       var ca = canvas.width / canvas.height;
       var sx = 1, sy = 1;
       if (va > ca) sx = ca / va; else sy = va / ca;
       gl.uniform2f(u.uScale, sx, sy);
       gl.uniform2f(u.uOff, (1 - sx) * 0.5, (1 - sy) * 0.5);
-      gl.uniform2f(u.uSrc, feedEl.videoWidth, feedEl.videoHeight);
+      gl.uniform2f(u.uSrc, src.videoWidth, src.videoHeight);
       gl.uniform2f(u.uRes, canvas.width, canvas.height);
 
       // The pane's real geometry, read from the element, so the refraction can
@@ -1630,7 +1674,7 @@ var Render = (function () {
 
       gl.bindTexture(gl.TEXTURE_2D, tex);
       try {
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, feedEl);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, src);
       } catch (e) { return; }
 
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -1642,14 +1686,34 @@ var Render = (function () {
 // One loop: the frames are both the proof the feed is alive and the source
 // for the render, so they are counted and drawn in the same place.
 var frameCount = 0;
-if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-  var onFrame = function () {
-    if (net) net.noteFrame();
+var srcEl = feedEl;
+
+// The frames of whichever video is current are both the proof it is alive and
+// the source for the render, so they are counted and drawn in one place. When
+// the source changes the old loop retires itself and a new one starts, rather
+// than two running at once over the same canvas.
+function useSource(el) {
+  if (srcEl === el) return;
+  srcEl = el;
+  Render.setSource(el);
+  if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) followFrames(el);
+}
+
+function followFrames(el) {
+  var step = function () {
+    if (srcEl !== el) return;               // superseded
     frameCount++;
+    // Only the live feed proves the connection is alive. A local file plays
+    // happily with the network on the floor.
+    if (el === feedEl && net) net.noteFrame();
     Render.draw();
-    feedEl.requestVideoFrameCallback(onFrame);
+    el.requestVideoFrameCallback(step);
   };
-  feedEl.requestVideoFrameCallback(onFrame);
+  el.requestVideoFrameCallback(step);
+}
+
+if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+  followFrames(feedEl);
 } else {
   var lastTime = -1;
   setInterval(function () {
@@ -1659,6 +1723,106 @@ if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
     }
   }, 1000);
   (function loop() { frameCount++; Render.draw(); requestAnimationFrame(loop); })();
+}
+
+// ------------------------------------------------------------ the sequences
+// The installation runs alone. calm loops indefinitely; holding the button
+// plays one response, in rotation, then returns to calm; she takes the surface
+// over from the MacBook and hands it back. Section 11d.
+//
+// Everything dissolves out through the field and reforms, rather than
+// cross-fading: it matches how she arrives at boot, and it means one canvas
+// and one shader pass instead of two.
+
+var playerEl = document.getElementById('player');
+var mode = null;                // 'calm' | 'live', told to us by the server
+var playing = 'calm';           // 'calm' | 'response'
+var responseIndex = 0;
+var dissolving = false;
+
+function videoUrl(name) { return '/video/' + name; }
+
+function playSequence(name, loop) {
+  playerEl.loop = !!loop;
+  playerEl.muted = !wantsSound;
+  playerEl.volume = 1;
+  if (playerEl.getAttribute('src') !== videoUrl(name)) {
+    playerEl.setAttribute('src', videoUrl(name));
+    playerEl.load();
+  }
+  playerEl.currentTime = 0;
+  var p = playerEl.play();
+  if (p && p.then) {
+    p.then(markFeedLive).catch(function (e) {
+      console.warn('sequence play refused', e && e.name);
+      // Same fallback as the live feed: silent is a diminished piece, a blank
+      // screen is no piece at all.
+      playerEl.muted = true;
+      body.classList.add('muted');
+      playerEl.play().then(markFeedLive).catch(function () { setState('wake'); });
+    });
+  } else {
+    markFeedLive();
+  }
+}
+
+// One movement: fade the surface out, change what it is showing, fade it back.
+function dissolveTo(fn) {
+  if (dissolving) return;
+  dissolving = true;
+  var ms = (CFG.video && CFG.video.dissolveMs) || 900;
+  body.classList.add('dissolving');
+  setTimeout(function () {
+    try { fn(); } catch (e) { console.warn(e); }
+    body.classList.remove('dissolving');
+    setTimeout(function () { dissolving = false; }, ms);
+  }, ms);
+}
+
+function toCalm() {
+  playing = 'calm';
+  dissolveTo(function () {
+    useSource(playerEl);
+    playSequence((CFG.video && CFG.video.calm) || 'calm.mp4', true);
+    setState('idle');
+  });
+}
+
+function toResponse() {
+  var list = (CFG.video && CFG.video.responses) || [];
+  if (!list.length) return;
+  // In rotation, never the same one twice running: a visitor who presses twice
+  // must not watch the same film restart.
+  var name = list[responseIndex % list.length];
+  responseIndex++;
+  playing = 'response';
+  dissolveTo(function () {
+    useSource(playerEl);
+    playSequence(name, false);
+    setState('idle');
+  });
+}
+
+// The response ends and the surface returns to the loop on its own.
+playerEl.addEventListener('ended', function () {
+  if (mode === 'live') return;
+  if (playing === 'response') toCalm();
+});
+
+// She takes the surface, or hands it back.
+function setMode(next) {
+  if (next === mode) return;
+  mode = next;
+  if (mode === 'live') {
+    dissolveTo(function () {
+      playerEl.pause();
+      useSource(feedEl);
+      if (feedEl.srcObject) playFeed();
+      setState('idle');
+    });
+  } else {
+    toCalm();
+  }
 }
 
 // ------------------------------------------------------------ push to talk
@@ -1685,6 +1849,9 @@ document.addEventListener('pointerdown', function (ev) {
   // answer, and the visitor cannot know that, so the surface simply does not
   // take the press.
   if (busy) return;
+  if (dissolving) return;
+  // A response is playing. Pressing again would restart her mid-sentence.
+  if (mode !== 'live' && playing === 'response') return;
   if (!started) { start(true).catch(function () {}); return; }
   if (holding) return;
   // A pointerup that never arrives (a finger dragged off the edge of the
@@ -1730,7 +1897,7 @@ function beginUtterance() {
   if (!net || !net.isOpen()) { pointerId = null; return; }
   holding = true;
   capturing = true;
-  net.send({ type: 'ptt-start', lang: 'auto' });
+  if (mode === 'live') net.send({ type: 'ptt-start', lang: 'auto' });
   setState('listening');
   flash('armed', 620);            // heard you: fires the moment recording starts
   clearTimeout(saidTimer); clearTimeout(liftTimer);
@@ -1746,9 +1913,17 @@ function endUtterance() {
   capturing = false;
   pointerId = null;
   clearTimeout(capTimer);
-  net.send({ type: 'ptt-end' });
+  if (mode === 'live') {
+    net.send({ type: 'ptt-end' });
+    setState('sent');
+    hold();
+    return;
+  }
+  // Nobody is listening, so nothing is recorded and nothing is transcribed.
+  // She answers with a sequence instead.
   setState('sent');
   hold();
+  setTimeout(function () { release(); toResponse(); }, 700);
   flash('sending', 820);          // gone: one lap of the border and out
 
   // If the transcript never comes back (server or whisper gone), the surface
@@ -1767,7 +1942,7 @@ function cancelUtterance() {
   if (!holding) return;
   holding = false;
   capturing = false;
-  net.send({ type: 'ptt-cancel' });
+  if (mode === 'live') net.send({ type: 'ptt-cancel' });
   setState('idle');
 }
 
@@ -1958,9 +2133,10 @@ document.addEventListener('visibilitychange', function () {
 });
 
 // ------------------------------------------------------------ go
-// Try to run the whole sequence without a tap. That succeeds after a watchdog
-// reload, because the microphone permission persists. On the very first launch
-// it fails, and the glass shows the invitation instead.
+// The loop starts regardless. The microphone is attempted alongside it and
+// succeeds without a tap after a watchdog reload, because the permission
+// persists; on a genuinely first launch it fails and the glass invites a tap.
+boot();
 start(false).catch(function () {});
 </script>
 </body>

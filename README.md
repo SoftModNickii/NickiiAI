@@ -10,6 +10,16 @@ is only the short operating summary.
 
 ---
 
+## How it runs
+
+The installation runs **alone**. The default is a calm 30 minute loop of her face; a visitor who
+holds the button gets one of several 5 minute responses, then it returns to the loop. When she
+performs, she logs in from the MacBook, takes the surface over for about an hour of live
+performance, and hands it back. Then she takes the laptop with her.
+
+All three pass through the same render pass, so they are indistinguishable and every transition
+is one movement. Sections 11d and 11e of the spec.
+
 ## What runs where
 
 **iPad, the visitor surface.** Her live face fills the screen, rendered on the device so it
@@ -17,9 +27,12 @@ reads as a machine's picture of a face rather than a video call, and her live vo
 of the speaker. A prismatic light runs the edge of the screen and is the whole interface. One
 glass disc says *Hold to speak*. Her answer arrives as her own voice, whenever she chooses.
 
-**MacBook, everything else.** It serves the app over local HTTPS, runs the signaling, runs
-Whisper, and publishes her outgoing feed from OBS. She wears an earpiece and hears the room
-continuously.
+**Raspberry Pi, the installation.** Access point, server and video store. The only thing that
+stays in the gallery, and the reason the iPad keeps working when she is not there.
+
+**MacBook, the instrument.** OBS, whisper, and her controller. Present only during the live
+hour. Institutional Wi-Fi (eduroam and the like) is never used for the device link: it isolates
+its clients, so the two devices cannot reach each other at all.
 
 No internet dependency, and no speech synthesis anywhere. The only voice belongs to Nickii.
 

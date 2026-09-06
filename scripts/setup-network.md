@@ -104,6 +104,42 @@ will notice the Mac's address has changed and reissue the certificate on its own
 
 ---
 
+# The Raspberry Pi, which is the installation
+
+Everything below replaces the Mac-as-router setup for the exhibition. The Pi is the only thing
+that stays in the gallery: it is the access point, the server and the video store. The MacBook
+is an instrument she brings and takes away.
+
+```sh
+sudo NICKII_WIFI_PASS='something-long' ./scripts/setup-pi.sh
+```
+
+One run on a fresh Raspberry Pi OS. It installs node, hostapd and dnsmasq, tells NetworkManager
+to leave `wlan0` alone (on Bookworm it otherwise fights hostapd for the interface), pins the Pi
+to `192.168.2.1`, makes `nickii.ai` resolve to it, and installs a systemd service so the whole
+thing comes back after a power cut with nobody present.
+
+**`ap_isolate=0` is not optional.** The iPad and the MacBook must reach each other directly: the
+media connections use host ICE candidates only, no STUN and no TURN. Any isolation between them
+means no picture and no sound, while every status on the Mac still reads green (4b).
+
+Four things afterwards, once:
+
+1. The certificate in `certs/`, issued for `nickii.ai` and `192.168.2.1`
+2. The sequences in `public/video/`, named as `config.js` lists them (README there)
+3. `NICKII_PASSWORD=...` in a `.env` beside `server.js`
+4. Trust the mkcert root on the iPad, then Add to Home Screen
+
+```sh
+systemctl status nickii      # is it running
+journalctl -u nickii -f      # what it is doing
+```
+
+**Whisper is not on the Pi.** It cannot run `large-v3-turbo` usefully and is only needed while
+she is live, so it stays on the MacBook. During calm and response nothing is transcribed.
+
+**The Pi 3 is the spare.** Same card, same setup. If the 4 dies mid-show, swap it.
+
 # One time setup on the Mac
 
 ## HTTPS

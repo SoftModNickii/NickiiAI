@@ -79,7 +79,11 @@
         connectedAt = Date.now();
         pendingHbSince = 0;
         escalated = false;
-        send({ type: opts.role === 'controller' ? 'register-controller' : 'register-viewer' });
+        // The controller has to prove itself, and the password is not known
+        // until she has typed it, so the page supplies the message.
+        send(opts.register
+          ? opts.register()
+          : { type: opts.role === 'controller' ? 'register-controller' : 'register-viewer' });
         status('open');
         if (opts.onOpen) opts.onOpen();
         startHeartbeat();

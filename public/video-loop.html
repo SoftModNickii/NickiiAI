@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Nickii AI">
+<meta name="format-detection" content="telephone=no">
+<title>Nickii AI - Video Loop</title>
+<style>
+/* ============================================================
+   NICKII AI - Standalone Video Loop Version
+   
+   This is a self-contained version that plays a video in a loop
+   without requiring any server connection. It maintains the
+   exact same visual appearance as the live version.
+   
+   To use:
+   1. Copy this file to the iPad (AirDrop, iCloud, etc.)
+   2. Open in Safari
+   3. Add to Home Screen for full-screen experience
+   4. Enable Guided Access to prevent exiting
+   
+   The video will autoplay in a loop with sound.
+   ============================================================ */
+
+:root {
+  --bg-0: #EBEAF2;
+  --bg-lift: #F8F7FD;
+  --tint-cool: #DEE1F1;
+  --tint-warm: #E9E2F1;
+  --glass-line: rgba(28,22,56,0.09);
+  --glass-blur: 30px;
+  --ink-hi: #1B1A24;
+  --ink-mid: #55525F;
+  --ink-lo: #8A8796;
+  --ok: #3E9B6D;
+  --warn: #B4703F;
+  --ai-1: #F2C766;
+  --ai-2: #B486DC;
+  --ai-3: #EE8CBA;
+  --ai-4: #F3AE8E;
+  --ai-stops: var(--ai-1), var(--ai-2), var(--ai-3), var(--ai-4), var(--ai-1);
+  --screen-radius: 42px;
+  --btn-size: 188px;
+  --foot-bottom: 15px;
+  --invite-bottom: 44px;
+  --btn-bottom: 140px;
+  --said-gap: 30px;
+  --glow: 0;
+  --font-display: "Archivo", -apple-system, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-soft: cubic-bezier(0.32, 0.72, 0.24, 1);
+  --dur-fast: 180ms;
+  --dur-med: 320ms;
+  --shadow-soft: 0 0.5px 1px rgba(32,24,64,0.05), 0 3px 10px rgba(32,24,64,0.06);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-0);
+  overflow: hidden;
+  font-family: var(--font-display);
+  color: var(--ink-hi);
+  -webkit-font-smoothing: antialiased;
+  font-optical-sizing: auto;
+  font-variation-settings: "wdth" 100;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+/* Background field with slow color drifts */
+#field {
+  position: fixed;
+  inset: -10%;
+  pointer-events: none;
+  background:
+    radial-gradient(46% 38% at 22% 18%, var(--tint-cool) 0%, transparent 62%),
+    radial-gradient(52% 44% at 82% 78%, var(--tint-warm) 0%, transparent 66%),
+    radial-gradient(70% 60% at 50% 42%, var(--bg-lift) 0%, transparent 70%);
+  animation: fieldDrift 120s ease-in-out infinite;
+}
+@keyframes fieldDrift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(0.5%, -0.4%, 0) scale(1.012); }
+}
+
+/* Grain overlay for texture */
+#grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Vignette at bottom */
+#vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent 64%, rgba(235,234,242,0.62) 100%);
+}
+
+/* ===== Presence - Video Loop ===== */
+#presence {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+}
+
+/* The video element - plays in loop */
+#feed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: saturate(0.94) contrast(1.06);
+  animation: presenceBreath 13s ease-in-out infinite;
+  will-change: transform;
+  -webkit-mask-image: radial-gradient(ellipse 40vh 50vh at 50% 38%,
+    #000 0%, #000 68%, rgba(0,0,0,0.80) 82%, rgba(0,0,0,0.26) 93%, transparent 100%);
+  mask-image: radial-gradient(ellipse 40vh 50vh at 50% 38%,
+    #000 0%, #000 68%, rgba(0,0,0,0.80) 82%, rgba(0,0,0,0.26) 93%, transparent 100%);
+}
+
+@keyframes presenceBreath {
+  0%, 100% { transform: scale(1.012) translate3d(0, 0, 0); }
+  33%      { transform: scale(1.030) translate3d(-0.35%, -0.5%, 0); }
+  66%      { transform: scale(1.020) translate3d(0.4%, 0.25%, 0); }
+}
+
+/* Halo effect around presence */
+#halo {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 1;
+}
+#halo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 56vh 62vh at 50% 38%,
+    transparent 44%, rgba(34,26,68,0.055) 74%, transparent 100%);
+  animation: haloBreath 13s ease-in-out infinite;
+}
+@keyframes haloBreath { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
+
+/* Waiting animation (shown before video starts) */
+#waiting {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(40vh 50vh at 50% 38%, var(--tint-cool) 0%, transparent 74%);
+  opacity: 0;
+  animation: waitBreath 9s ease-in-out infinite;
+}
+@keyframes waitBreath { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+/* ===== Stage ===== */
+#stage {
+  position: fixed;
+  inset: 0;
+}
+
+/* ===== Edge Light (animated border) ===== */
+#edge {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 1;
+}
+
+#edge .ring, #edge .bloom, #edge .sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--screen-radius);
+  overflow: hidden;
+}
+
+#edge .ring > i, #edge .bloom > i {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 130vmax; height: 130vmax;
+  margin: -65vmax 0 0 -65vmax;
+  will-change: transform;
+  display: block;
+  background: conic-gradient(var(--ai-stops));
+  animation: aiSpin 22s linear infinite;
+}
+
+#edge .bloom > i { animation-timing-function: steps(90, end); }
+
+@keyframes aiSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+#edge .ring {
+  padding: 4px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0.52;
+}
+
+#edge .bloom-wrap {
+  position: absolute;
+  inset: 0;
+  filter: blur(44px);
+  opacity: 0.52;
+}
+#edge .bloom {
+  padding: 34px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+}
+
+#edge .sweep {
+  padding: 7px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0;
+}
+#edge .sweep > i {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 130vmax; height: 130vmax;
+  margin: -65vmax 0 0 -65vmax;
+  will-change: transform;
+  display: block;
+  background: conic-gradient(
+    transparent 0deg, transparent 288deg,
+    rgba(180,134,220,0.55) 320deg,
+    #ffffff 344deg,
+    rgba(238,140,186,0.60) 352deg,
+    transparent 360deg);
+}
+
+/* ===== Button (Pane) ===== */
+#pane {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--btn-bottom) + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: var(--btn-size);
+  height: var(--btn-size);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(120% 90% at 50% 6%, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.62) 46%, rgba(255,255,255,0.52) 100%);
+  border: 1px solid rgba(28,22,56,0.05);
+  box-shadow: 0 1px 2px rgba(32,24,64,0.07),
+              0 12px 28px rgba(32,24,64,0.10),
+              0 30px 64px rgba(32,24,64,0.12),
+              inset 0 1.5px 0 rgba(255,255,255,1),
+              inset 0 -1.5px 0 rgba(255,255,255,0.75),
+              inset 0 -22px 34px -24px rgba(32,24,64,0.16);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+          backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  will-change: transform;
+  transition: transform 420ms cubic-bezier(0.22, 1.5, 0.36, 1),
+              box-shadow 220ms var(--ease-soft),
+              opacity var(--dur-med) ease;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#pane .halo {
+  position: absolute;
+  inset: -28px;
+  pointer-events: none;
+  filter: blur(20px);
+  opacity: 0.55;
+}
+#pane .halo > i {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: 50%;
+  padding: 24px;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  background: conic-gradient(var(--ai-stops));
+  animation: aiSpin 9s linear infinite;
+}
+
+#pane .ring {
+  position: absolute;
+  inset: -3.5px;
+  border-radius: 50%;
+  padding: 3.5px;
+  pointer-events: none;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0.62;
+}
+#pane .ring > i {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 300px; height: 300px;
+  margin: -150px 0 0 -150px;
+  display: block;
+  background: conic-gradient(var(--ai-stops));
+  animation: aiSpin 9s linear infinite;
+}
+
+#pane .core {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--ink-hi);
+  opacity: 0.20;
+  transform: scale(1);
+  transition: opacity 200ms linear, transform 120ms linear;
+}
+
+#pane .arc {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+#pane .arc svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+#pane .arc text {
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 590;
+  letter-spacing: 0.005em;
+  fill: var(--ink-hi);
+}
+
+/* ===== Invitation Text ===== */
+#invite {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--invite-bottom) + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 3;
+}
+#invite .en {
+  display: block;
+  font-size: clamp(26px, 3vw, 38px);
+  font-weight: 400;
+  letter-spacing: -0.028em;
+  line-height: 1.14;
+  color: var(--ink-hi);
+  text-shadow: 0 1px 20px rgba(235,234,242,0.75);
+}
+#invite .de {
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink-lo);
+}
+
+/* ===== Footer ===== */
+#footer {
+  position: fixed;
+  bottom: calc(var(--foot-bottom) + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-lo);
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 3;
+}
+#footer .sep { opacity: 0.45; }
+
+/* ===== Masthead ===== */
+#masthead {
+  position: fixed;
+  top: calc(26px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(920px, 88vw);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 3;
+}
+.wordmark {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-hi);
+}
+.wordmark .ai {
+  font-weight: 400;
+  letter-spacing: 0.24em;
+  color: var(--ink-lo);
+}
+
+#status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 6px 10px;
+  border-radius: 7px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+  background: rgba(255,255,255,0.62);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--shadow-soft);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+          backdrop-filter: blur(14px) saturate(180%);
+}
+#status .dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+/* ===== Landscape mode adjustments ===== */
+@media (orientation: landscape) {
+  :root {
+    --screen-radius: 36px;
+    --btn-size: 168px;
+    --foot-bottom: 12px;
+    --invite-bottom: 34px;
+    --btn-bottom: 132px;
+    --said-gap: 24px;
+  }
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Hide elements that don't make sense for video loop mode */
+#muted-choice,
+#sound-off,
+#ops-hot,
+#ops,
+#said {
+  display: none !important;
+}
+
+/* Ensure video is always visible */
+#presence {
+  opacity: 1 !important;
+}
+
+/* Make the button non-interactive (just visual) but keep the look */
+#pane {
+  pointer-events: none;
+}
+
+/* Hide masthead and footer for cleaner look, or keep them? Let's keep them for authenticity */
+
+/* ===== Video Loading State ===== */
+body.no-video #presence {
+  opacity: 0;
+}
+body.no-video #waiting {
+  opacity: 1;
+}
+
+/* ===== Full screen mode ===== */
+body.fullscreen #masthead,
+body.fullscreen #footer {
+  display: none;
+}
+body.fullscreen #pane {
+  display: none;
+}
+body.fullscreen #invite {
+  display: none;
+}
+body.fullscreen #edge {
+  display: none;
+}
+body.fullscreen #presence {
+  inset: 0;
+}
+body.fullscreen #feed {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* ===== Instructions overlay (can be toggled) ===== */
+.instructions {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 30px;
+  border-radius: 20px;
+  text-align: center;
+  z-index: 100;
+  max-width: 80%;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.instructions.show {
+  display: block;
+}
+.instructions button {
+  margin-top: 20px;
+  padding: 12px 24px;
+  background: white;
+  color: black;
+  border: none;
+  border-radius: 100px;
+  cursor: pointer;
+  font-size: 16px;
+}
+</style>
+</head>
+<body class="feed-live">
+
+<div id="stage">
+  <div id="field"></div>
+  <div id="presence">
+    <!-- 
+      VIDEO PLACEMENT OPTIONS:
+      
+      Option 1: Use a video file stored locally on the iPad
+      - Copy your video file to the same folder as this HTML file
+      - Update the src attribute below to point to your video file
+      - Example: src="nickii-loop.mp4"
+      
+      Option 2: Use a video from the internet
+      - Change src to a direct URL to an .mp4 file
+      - Example: src="https://your-server.com/nickii-loop.mp4"
+      
+      IMPORTANT: For autoplay with sound on iOS:
+      - Video must be muted OR user must have interacted with the page
+      - For best results, use muted autoplay and let user unmute via button
+      - iOS requires user gesture for unmuted autoplay
+    -->
+    <video id="feed" autoplay playsinline loop muted>
+      <!-- 
+        ADD YOUR VIDEO SOURCE HERE
+        Example for local file (place video in same folder):
+        <source src="nickii-video-loop.mp4" type="video/mp4">
+        
+        Example for remote file:
+        <source src="https://example.com/nickii-loop.mp4" type="video/mp4">
+        
+        For multiple formats (better compatibility):
+        <source src="nickii-loop.webm" type="video/webm">
+        <source src="nickii-loop.mp4" type="video/mp4">
+      -->
+      <!-- Default: Placeholder - REPLACE THIS -->
+      <source src="nickii-loop.mp4" type="video/mp4">
+      
+      <!-- Fallback message -->
+      Your browser does not support the video tag or the video file is missing.
+    </video>
+  </div>
+  <div id="halo"></div>
+  <div id="waiting"></div>
+  <div id="vignette"></div>
+  <div id="grain"></div>
+
+  <div id="masthead">
+    <div class="wordmark">Nickii<span class="ai">AI</span></div>
+    <div id="status"><i class="dot"></i><span>Offline</span></div>
+  </div>
+
+  <div id="edge">
+    <div class="bloom-wrap"><div class="bloom"><i></i></div></div>
+    <div class="ring"><i></i></div>
+    <div class="sweep"><i></i></div>
+  </div>
+
+  <div id="said"></div>
+
+  <div id="invite">
+    <span class="en">Nickii AI</span>
+    <span class="de">Kunst Installations Modus</span>
+  </div>
+
+  <div id="pane">
+    <i class="halo"><i></i></i>
+    <i class="ring"><i></i></i>
+    <svg class="arc" viewBox="0 0 200 200" aria-hidden="true">
+      <defs>
+        <path id="arc-top" d="M 24,100 A 76,76 0 0 1 176,100"/>
+        <path id="arc-bot" d="M 32,100 A 68,68 0 0 0 168,100"/>
+      </defs>
+      <text class="a-en"><textPath href="#arc-top" startOffset="50%" text-anchor="middle">Video Loop</textPath></text>
+      <text class="a-de"><textPath href="#arc-bot" startOffset="50%" text-anchor="middle">Video Schleife</textPath></text>
+    </svg>
+    <i class="core"></i>
+  </div>
+
+  <div id="footer">
+    <span>nickii.ai</span>
+    <span class="sep">·</span>
+    <span>Video Loop Mode</span>
+  </div>
+</div>
+
+<!-- Instructions overlay (hidden by default) -->
+<div class="instructions" id="instructions">
+  <h2>Nickii AI - Video Loop Mode</h2>
+  <p>This is a standalone version that plays a video in a continuous loop without requiring a server connection.</p>
+  <p><strong>To add your video:</strong> Place your video file (e.g., <code>nickii-loop.mp4</code>) in the same folder as this HTML file, or edit the video source in the code.</p>
+  <p><strong>To enable sound:</strong> Tap anywhere on the screen. iOS requires user interaction for unmuted autoplay.</p>
+  <p><strong>For best results:</strong> Add this page to your Home Screen and use Guided Access to prevent exiting.</p>
+  <button onclick="document.getElementById('instructions').classList.remove('show')">Close</button>
+</div>
+
+<script>
+// Nickii AI - Video Loop Version
+// Self-contained, no server required
+
+document.addEventListener('DOMContentLoaded', function() {
+  var video = document.getElementById('feed');
+  var body = document.body;
+  var instructions = document.getElementById('instructions');
+  
+  // Check if video source exists and can play
+  video.addEventListener('canplay', function() {
+    body.classList.remove('no-video');
+    console.log('Video can play');
+    
+    // Try to play (may fail on iOS without user interaction)
+    var playPromise = video.play();
+    
+    if (playPromise !== undefined) {
+      playPromise.catch(function(error) {
+        console.log('Autoplay prevented:', error);
+        // Show instructions
+        instructions.classList.add('show');
+      });
+    }
+  });
+  
+  video.addEventListener('error', function() {
+    body.classList.add('no-video');
+    console.error('Video error:', video.error);
+    instructions.classList.add('show');
+  });
+  
+  video.addEventListener('playing', function() {
+    body.classList.remove('no-video');
+    instructions.classList.remove('show');
+  });
+  
+  // Enable sound on user interaction
+  document.addEventListener('click', function enableSound() {
+    if (video.muted) {
+      video.muted = false;
+      // Re-play to ensure sound works
+      video.currentTime = 0;
+      video.play().catch(function() {});
+    }
+    document.removeEventListener('click', enableSound);
+  }, { once: true });
+  
+  // Double-tap to toggle fullscreen
+  var lastTap = 0;
+  document.addEventListener('click', function(e) {
+    var now = Date.now();
+    if (now - lastTap < 300) {
+      // Double tap detected
+      body.classList.toggle('fullscreen');
+      lastTap = 0;
+    } else {
+      lastTap = now;
+    }
+  });
+  
+  // Show instructions on long press (1.5 seconds)
+  var pressTimer;
+  document.addEventListener('touchstart', function(e) {
+    pressTimer = setTimeout(function() {
+      instructions.classList.toggle('show');
+    }, 1500);
+  });
+  
+  document.addEventListener('touchend', function(e) {
+    clearTimeout(pressTimer);
+  });
+  document.addEventListener('touchmove', function(e) {
+    clearTimeout(pressTimer);
+  });
+});
+
+// Handle visibility change (pause video when tab is hidden)
+document.addEventListener('visibilitychange', function() {
+  var video = document.getElementById('feed');
+  if (document.hidden) {
+    // Optionally pause video when hidden to save battery
+    // video.pause();
+  } else {
+    if (!video.paused) {
+      // video.play().catch(function() {});
+    }
+  }
+});
+</script>
+</body>
+</html>
