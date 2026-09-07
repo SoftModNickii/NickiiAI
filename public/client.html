@@ -1782,21 +1782,32 @@ function playSequence(name, loop) {
 }
 
 // One movement: fade the surface out, change what it is showing, fade it back.
+var dissolveMid = null, dissolveEnd = null;
+
+// A change arriving mid-dissolve replaces the one in flight; it is never
+// dropped. Dropping it was the toggling bug: setMode had already recorded the
+// new mode, so the state and the picture diverged and stayed diverged. Going
+// live, handing back and going live again would leave the iPad on the loop
+// while the controller believed it was live.
 function dissolveTo(fn) {
-  if (dissolving) return;
+  clearTimeout(dissolveMid);
+  clearTimeout(dissolveEnd);
   dissolving = true;
   var ms = (CFG.video && CFG.video.dissolveMs) || 900;
   body.classList.add('dissolving');
-  setTimeout(function () {
+  dissolveMid = setTimeout(function () {
     try { fn(); } catch (e) { console.warn(e); }
     body.classList.remove('dissolving');
-    setTimeout(function () { dissolving = false; }, ms);
+    dissolveEnd = setTimeout(function () { dissolving = false; }, ms);
   }, ms);
 }
 
 function toCalm() {
   playing = 'calm';
   dissolveTo(function () {
+    // Her feed keeps arriving after she hands back, and the element keeps
+    // playing it. Left alone her voice carries on underneath the loop.
+    try { feedEl.pause(); feedEl.muted = true; } catch (e) {}
     useSource(playerEl);
     playSequence((CFG.video && CFG.video.calm) || 'calm.mp4', true);
     setState('idle');
@@ -1832,6 +1843,8 @@ function setMode(next) {
     dissolveTo(function () {
       playerEl.pause();
       useSource(feedEl);
+      // playFeed puts the sound back and starts it again, whatever handing
+      // back left it as.
       if (feedEl.srcObject) playFeed();
       setState('idle');
     });
