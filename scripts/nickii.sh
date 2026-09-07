@@ -40,9 +40,18 @@ listening(){ lsof -ti :"$1" >/dev/null 2>&1; }
 # An address that answers /health and is not one of this Mac's own addresses is
 # the installation. The self check matters: with dns.js running, nickii.ai is
 # this Mac, and without it the Mac would find itself and hand over to itself.
-is_self(){
+# dscacheutil answers from a cache that is often empty for a name nothing has
+# asked for yet, and it does not do mDNS at all. ping does both, so it is the
+# fallback rather than the other way round.
+resolve(){
   local ip
   ip="$(dscacheutil -q host -a name "$1" 2>/dev/null | awk '/^ip_address:/{print $2; exit}')"
+  [ -n "$ip" ] && { echo "$ip"; return 0; }
+  ping -c 1 -t 1 "$1" 2>/dev/null | sed -n '1s/.*(\([0-9.]*\)).*/\1/p'
+}
+
+is_self(){
+  local ip; ip="$(resolve "$1")"
   [ -z "$ip" ] && return 1
   ifconfig 2>/dev/null | grep -qw "inet $ip"
 }
@@ -50,7 +59,10 @@ is_self(){
 PI_HOST=""
 find_pi(){
   local cand
-  for cand in nickii.ai nickii-pi.local; do
+  # 192.168.2.1 last and always: it is the Pi's fixed address on its own
+  # network, and it needs nothing to resolve it. curl does not speak mDNS, so
+  # nickii-pi.local only works when something else has already cached it.
+  for cand in nickii.ai nickii-pi.local 192.168.2.1; do
     is_self "$cand" && continue
     if curl -sk --max-time 3 "https://$cand/health" 2>/dev/null | grep -q '"ok":true'; then
       PI_HOST="$cand"; return 0

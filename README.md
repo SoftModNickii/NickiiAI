@@ -31,8 +31,9 @@ glass disc says *Hold to speak*. Her answer arrives as her own voice, whenever s
 stays in the gallery, and the reason the iPad keeps working when she is not there.
 
 **MacBook, the instrument.** OBS, whisper, and her controller. Present only during the live
-hour. Institutional Wi-Fi (eduroam and the like) is never used for the device link: it isolates
-its clients, so the two devices cannot reach each other at all.
+hour. Whisper stays here because a Pi cannot run `large-v3-turbo` usefully; the Pi reaches it
+by name over mDNS. Institutional Wi-Fi (eduroam and the like) is never used for the device
+link: it isolates its clients, so the two devices cannot reach each other at all.
 
 No internet dependency, and no speech synthesis anywhere. The only voice belongs to Nickii.
 
@@ -49,8 +50,16 @@ and nowhere else: never written to disk, buffered, or logged.
 
 ## Run it
 
-Double-click **NICKII AI.app** on the Desktop. It starts whisper and the server, waits until
-`/health` actually answers, prints what is and is not running, and opens the controller.
+Double-click **NICKII AI.app** on the Desktop. It works out which of the two shapes it is in
+rather than asking, because choosing wrong by hand gives a dead installation with every light
+still green.
+
+- **The Pi is answering.** This Mac is only the instrument. It starts whisper on the network,
+  waits until the Pi confirms it can hear it, and opens the controller at `nickii.ai`.
+- **No Pi.** This Mac is the whole system. It starts whisper and the server, waits until
+  `/health` actually answers, and opens the controller here.
+
+Either way it prints what is and is not running.
 
 Build that launcher once with `./scripts/make-launcher.sh`. By hand:
 
@@ -80,7 +89,7 @@ iPad. Both are read-only diagnostics.
 npm test
 ```
 
-163 checks, no dependencies, roughly a minute. Four suites:
+178 checks, no dependencies, roughly a minute. Four suites:
 
 - `tests/resampler.js` runs the capture worklet outside a browser and proves the 16 kHz PCM fed
   to Whisper is sample exact at both 48 and 44.1 kHz.

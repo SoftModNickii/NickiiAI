@@ -31,6 +31,8 @@ IP="${NICKII_AP_IP:-192.168.2.1}"
 BAND="${NICKII_BAND:-bg}"          # bg = 2.4 GHz, better through walls. a = 5 GHz, faster.
 REVERT="${NICKII_AP_REVERT:-720}"  # seconds before an unconfirmed access point gives up. 0 disables.
 PORT="${NICKII_PORT:-443}"
+MAC_HOST="${NICKII_MAC_HOST:-nickii.local}"   # her MacBook, over mDNS
+CONTROL_PASS="${NICKII_PASSWORD:-}"
 
 DO_SERVICE=0; DO_AP=0
 case "${1:-both}" in
@@ -51,6 +53,25 @@ esac
 # ---------------------------------------------------------------- the service
 if [ "$DO_SERVICE" = "1" ]; then
   echo "==> installing the server as a service"
+
+  # Whisper cannot run usefully on a Pi and is only needed while she is live, so
+  # it stays on the MacBook. That makes it the one part of this system living on
+  # another machine, and the Pi has to be told where. A name rather than an
+  # address: her Mac takes a new one from this Pi every time it joins, and a
+  # wrong address here is silent. Everything reads green and no message arrives.
+  if [ ! -f "${REPO}/.env" ]; then
+    { echo "NICKII_PORT=${PORT}"
+      # Guarded rather than an && one liner: under set -e a false test would end
+      # the script here and leave the Pi with no service at all.
+      if [ -n "$CONTROL_PASS" ]; then echo "NICKII_PASSWORD=${CONTROL_PASS}"; fi
+      echo "NICKII_WHISPER_URL=http://${MAC_HOST}:8178/inference"
+    } > "${REPO}/.env"
+    chown "${RUN_USER}" "${REPO}/.env"; chmod 600 "${REPO}/.env"
+    echo "    wrote .env"
+  elif ! grep -q '^NICKII_WHISPER_URL=' "${REPO}/.env"; then
+    echo "NICKII_WHISPER_URL=http://${MAC_HOST}:8178/inference" >> "${REPO}/.env"
+    echo "    added NICKII_WHISPER_URL to the existing .env"
+  fi
 
   cat > /etc/systemd/system/nickii.service <<EOF
 [Unit]

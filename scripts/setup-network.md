@@ -114,7 +114,7 @@ Run it in two halves, because they carry different risk.
 
 ```sh
 sudo ./scripts/setup-pi.sh --service                            # safe over SSH
-sudo NICKII_WIFI_PASS='something-long' ./scripts/setup-pi.sh --ap   # kills your SSH session
+sudo NICKII_WIFI_PASS='nickii2026' ./scripts/setup-pi.sh --ap   # kills your SSH session
 ```
 
 `--service` installs node and a systemd unit that binds port 443, so the URL has no port in it
@@ -157,8 +157,35 @@ systemctl status nickii      # is it running
 journalctl -u nickii -f      # what it is doing
 ```
 
-**Whisper is not on the Pi.** It cannot run `large-v3-turbo` usefully and is only needed while
-she is live, so it stays on the MacBook. During calm and response nothing is transcribed.
+## Whisper stays on the Mac, and the Pi has to be told where
+
+It cannot run `large-v3-turbo` usefully on a Pi and is only needed while she is live, so it
+stays on the MacBook. That makes it the one part of this system living on another machine,
+and the part most likely to be quietly missing: everything reads green while visitor messages
+go nowhere. During calm and response nothing is transcribed, so it only costs the live hour.
+
+Both halves are automatic:
+
+- The Pi's `.env` gets `NICKII_WHISPER_URL=http://nickii.local:8178/inference`, written by
+  `--service`. A name rather than an address, because her Mac takes a new one from the Pi
+  every time it joins. The Pi resolves it over mDNS, which needs no uplink.
+- On the Mac, `scripts/nickii.sh` finds the Pi, sees that this Mac is now only the instrument,
+  and starts whisper on the network instead of on localhost. It then waits for the Pi to
+  confirm it can actually hear whisper, and says which way it went.
+
+## Getting the Pi back onto a normal network
+
+Once it is an access point it joins nothing, so this needs its console: a screen and a
+keyboard, or Ethernet. Before `--ap-confirm` this is not needed at all, since the dead-man
+switch does it by itself.
+
+```sh
+sudo nmcli connection modify nickii-ap connection.autoconnect no
+sudo nmcli connection down nickii-ap
+sudo nmcli connection up netplan-wlan0-URBANAUTS      # or whichever profile
+```
+
+To hand it back to the gallery, set `connection.autoconnect yes` and reboot.
 
 **The Pi 3 is the spare.** Same card, same setup. If the 4 dies mid-show, swap it.
 
