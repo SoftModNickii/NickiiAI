@@ -159,6 +159,7 @@ const state = {
   transcriptCount: 0,
   whisperReachable: false,
   whisperCheckedAt: null,
+  whisperUrl: config.whisperUrl,    // where it actually is, which may not be here
 };
 
 function sendToController(data) {
@@ -182,6 +183,10 @@ function toCalm(why) {
   state.liveSince = null;
   log('mode.calm', { why });
   broadcastToViewers({ type: 'mode', mode: 'calm' });
+  // Her controller is told too, and this is not symmetry for its own sake:
+  // without it her buttons stay frozen in the live state and she can hand back
+  // exactly once, then never go live again.
+  sendToController({ type: 'mode', mode: 'calm' });
 }
 
 let handbackTimer = null;
@@ -200,6 +205,7 @@ function health() {
     viewerCount: clients.viewers.size,
     whisperReachable: state.whisperReachable,
     whisperCheckedAt: state.whisperCheckedAt,
+    whisperUrl: state.whisperUrl,
     monitorFeedUp: state.monitorUp,
     outgoingFeed: { video: state.feed.video, audio: state.feed.audio },
     surface: state.mode,
@@ -242,7 +248,7 @@ function pcmToWav(pcm) {
 function postToWhisper(wav, lang) {
   return new Promise((resolve, reject) => {
     let url;
-    try { url = new URL(config.whisperUrl); } catch (e) { return reject(new Error('bad whisperUrl')); }
+    try { url = new URL(state.whisperUrl); } catch (e) { return reject(new Error('bad whisperUrl')); }
 
     const boundary = '----nickii' + crypto.randomBytes(12).toString('hex');
     const field = (name, value) => Buffer.from(
@@ -295,9 +301,37 @@ function postToWhisper(wav, lang) {
   });
 }
 
+// Whisper lives on whichever machine is holding the controller. Called with an
+// address when she connects and with null when she goes, so that a stale
+// address cannot outlive her: without this the Pi would keep posting utterances
+// at a laptop that left the building.
+function followWhisper(remoteAddress) {
+  if (!config.whisperFollowsController) return;
+
+  let next = config.whisperUrl;
+  if (remoteAddress) {
+    const ip = String(remoteAddress).replace(/^::ffff:/, '');
+    const local = ip === '127.0.0.1' || ip === '::1';
+    if (!local) {
+      const here = new URL(config.whisperUrl);
+      // Bare IPv6 needs brackets in a URL, and the controller can arrive as one.
+      const host = ip.includes(':') ? `[${ip}]` : ip;
+      next = `${here.protocol}//${host}:${here.port || 8178}${here.pathname}`;
+    }
+  }
+  if (next === state.whisperUrl) return;
+
+  state.whisperUrl = next;
+  // The old answer describes a machine that is no longer the one being asked.
+  state.whisperReachable = false;
+  state.whisperCheckedAt = null;
+  log('whisper.follow', { url: next });
+  probeWhisper();
+}
+
 function probeWhisper(done) {
   let url;
-  try { url = new URL(config.whisperUrl); } catch (_) { return done && done(); }
+  try { url = new URL(state.whisperUrl); } catch (_) { return done && done(); }
   let settled = false;
   const finish = (reachable) => {
     if (settled) return;
@@ -489,6 +523,7 @@ wss.on('connection', (ws, req) => {
         }
         sendJson(ws, { type: 'auth-ok' });
         ws.role = 'controller';
+        followWhisper(req.socket.remoteAddress);
         clients.controller = ws;
         cachedOffer = null;
         cachedIceCandidates = [];
@@ -497,6 +532,9 @@ wss.on('connection', (ws, req) => {
         clearTimeout(handbackTimer);
         log('controller.register', {});
         sendToController({ type: 'viewer-count', count: clients.viewers.size });
+        // She may have reloaded mid performance. Without this her buttons come
+        // back describing a surface that is not the one the iPad is showing.
+        sendToController({ type: 'mode', mode: state.mode });
         break;
 
       case 'webrtc-offer':
@@ -635,6 +673,7 @@ wss.on('connection', (ws, req) => {
       cachedIceCandidates = [];
       state.monitorUp = false;
       state.feed = { video: false, audio: false };
+      followWhisper(null);
       log('controller.disconnect', { note: 'cache cleared' });
       // She may simply have shut the laptop. Give her a moment to come back
       // before the surface returns to the loop in front of a visitor.

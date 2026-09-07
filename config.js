@@ -16,6 +16,14 @@ module.exports = {
   keyPath: './certs/nickii.local-key.pem',
 
   whisperUrl: process.env.NICKII_WHISPER_URL || 'http://127.0.0.1:8178/inference',
+  // Whisper runs on her MacBook, always: the Pi cannot run large-v3-turbo
+  // usefully, and it is only needed while she is live anyway. But the server
+  // moved to the Pi, so loopback no longer reaches it. Rather than pinning the
+  // Mac's address, which DHCP and a private Wi-Fi address both change, the
+  // server follows the controller: the machine holding the controller socket
+  // IS the MacBook, and it is connected exactly when transcription is wanted.
+  // An explicit NICKII_WHISPER_URL always wins.
+  whisperFollowsController: !process.env.NICKII_WHISPER_URL,
   whisperLang: 'auto',
   whisperTimeoutMs: 20000,
 

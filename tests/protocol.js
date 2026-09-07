@@ -298,6 +298,29 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ctrl.send({ type: 'hand-back' });
     await wait(160);
     check('handing back reaches the iPad', v3.last('mode').mode === 'calm');
+    check('handing back reaches her too', ctrl.last('mode').mode === 'calm');
+
+    // She takes the stage and gives it back through an evening, not once. This
+    // only ever checked the iPad, which is how a broken controller went unseen:
+    // the iPad returned to the loop correctly every time, while her own buttons
+    // stayed frozen in the live state and Go live never came back.
+    let cycles = 0;
+    for (let i = 0; i < 3; i++) {
+      ctrl.send({ type: 'go-live' });
+      await wait(140);
+      const upIpad = v3.last('mode').mode === 'live';
+      const upHer  = ctrl.last('mode').mode === 'live';
+      ctrl.send({ type: 'hand-back' });
+      await wait(140);
+      const backIpad = v3.last('mode').mode === 'calm';
+      const backHer  = ctrl.last('mode').mode === 'calm';
+      if (upIpad && upHer && backIpad && backHer) cycles++;
+    }
+    check('she can take the stage and give it back repeatedly', cycles === 3, `${cycles}/3`);
+
+    ctrl.send({ type: 'go-live' });
+    await wait(140);
+
     v3.ws.close();
 
     // ---- the iPad reporting on itself, and being reloaded from her side
@@ -330,6 +353,18 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const h3 = JSON.parse((await get('/health')).body);
     check('cache cleared on controller disconnect', h3.offerCached === false);
     check('monitor and feed flags reset', !h3.monitorFeedUp && !h3.outgoingFeed.video);
+
+    // She reloaded her controller mid performance: the old socket closed, this
+    // is the new one, and the iPad never stopped showing her. Her buttons have
+    // to come back describing that, not the state the page happens to load in.
+    check('the surface stays live while she is away',
+      JSON.parse((await get('/health')).body).surface === 'live');
+    const rejoin = await client();
+    rejoin.send({ type: 'register-controller', password: 'nickii' });
+    await wait(220);
+    check('a controller that rejoins is told the surface is live',
+      !!rejoin.last('mode') && rejoin.last('mode').mode === 'live');
+    rejoin.ws.close();
 
     v1.ws.close();
   } finally {
