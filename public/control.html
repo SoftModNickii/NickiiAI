@@ -143,10 +143,19 @@ html, body {
 .row.sub { font-size: 11px; color: var(--ink-lo); padding-left: 17px; margin-top: -5px; letter-spacing: 0.01em; }
 .row.sub .warn { color: var(--warn-ink); }
 
-/* Monitor: one level meter and one mute toggle. */
+/* Monitor: two level meters and one mute toggle. Her voice going out, and the
+   room coming back. */
 #monitor { display: flex; flex-direction: column; gap: 12px; margin-top: auto; }
-#meter { height: 3px; border-radius: 2px; background: rgba(27,26,36,0.09); overflow: hidden; }
-#meter-fill { height: 100%; width: 0%; background: var(--accent); opacity: 0.9; transition: width 80ms linear; }
+.lvl { display: flex; flex-direction: column; gap: 5px; }
+.lvl-note, #voice-note { font-size: 11px; font-weight: 400; color: var(--ink-lo); letter-spacing: 0.01em; }
+#meter, #voice { height: 3px; border-radius: 2px; background: rgba(27,26,36,0.09); overflow: hidden; }
+#meter-fill, #voice-fill { height: 100%; width: 0%; opacity: 0.9; transition: width 80ms linear; }
+#meter-fill { background: var(--accent); }
+#voice-fill { background: var(--ai-2, #b486dc); }
+/* Silence while she is live is the fault that looks like nothing at all: every
+   status green, no sound on the glass. It gets said in words, not just a flat
+   bar, because a flat bar is what a quiet room looks like too. */
+#voice-note.silent { color: var(--warn-ink); }
 #mute {
   appearance: none; -webkit-appearance: none;
   font: inherit; font-size: 13px; font-weight: 400; color: var(--ink-lo);
@@ -325,7 +334,16 @@ body.live #stage-state { color: var(--ok); }
     </div>
 
     <div id="monitor">
-      <div id="meter"><div id="meter-fill"></div></div>
+      <!-- Her voice on its way out, which had no meter at all and is the one
+           thing she cannot hear for herself. -->
+      <div class="lvl">
+        <div id="voice"><div id="voice-fill"></div></div>
+        <div id="voice-note">her voice</div>
+      </div>
+      <div class="lvl">
+        <div id="meter"><div id="meter-fill"></div></div>
+        <div class="lvl-note">the room</div>
+      </div>
       <button id="mute" type="button">monitor on, click to mute</button>
     </div>
   </div>
@@ -698,8 +716,11 @@ function reportFeed() {
     localStream.getVideoTracks().forEach(function (t) { if (t.readyState === 'live' && !t.muted) v = true; });
     localStream.getAudioTracks().forEach(function (t) { if (t.readyState === 'live' && !t.muted) a = true; });
   }
-  setDot('feed', v && a, v && a ? 'live' : (v || a ? 'partial' : 'off'));
-  if (net) net.send({ type: 'feed-status', video: v, audio: a });
+  // A track that exists is not a track that carries anything. Reporting only
+  // its existence is what let a silent BlackHole read as a healthy feed.
+  var heard = !!voiceHotAt && (Date.now() - voiceHotAt) < 10000;
+  setDot('feed', v && a, v && a ? (heard ? 'live' : 'live, but silent') : (v || a ? 'partial' : 'off'));
+  if (net) net.send({ type: 'feed-status', video: v, audio: a, heard: heard });
 }
 
 // ------------------------------------------------------------ earpiece graph
@@ -806,8 +827,42 @@ function rmsOf(analyser, buf) {
   return Math.sqrt(sum / buf.length);
 }
 
+// The last moment her outgoing audio carried anything. A track can be live,
+// unmuted and completely silent, which is exactly what a missing OBS monitoring
+// route looks like from in here: every status green and nothing on the glass.
+var voiceHotAt = 0, voiceSmooth = 0;
+
+function meterOutgoing() {
+  if (!outAnalyser) {
+    el('voice-note').textContent = 'her voice: no audio device';
+    el('voice-note').className = 'silent';
+    el('voice-fill').style.width = '0%';
+    return;
+  }
+  if (!outBuf) outBuf = new Uint8Array(outAnalyser.fftSize);
+  var lvl = Math.min(1, rmsOf(outAnalyser, outBuf) * 5);
+  voiceSmooth += (lvl - voiceSmooth) * (lvl > voiceSmooth ? 0.5 : 0.08);
+  el('voice-fill').style.width = (voiceSmooth * 100).toFixed(1) + '%';
+
+  if (lvl > 0.02) voiceHotAt = Date.now();
+  // Ten seconds, so a pause between sentences is not called a fault.
+  var quiet = voiceHotAt && (Date.now() - voiceHotAt) > 10000;
+  if (!voiceHotAt) {
+    el('voice-note').textContent = 'her voice: nothing yet. Is OBS monitoring into BlackHole?';
+    el('voice-note').className = 'silent';
+  } else if (quiet) {
+    el('voice-note').textContent = 'her voice: silent for a while';
+    el('voice-note').className = 'silent';
+  } else {
+    el('voice-note').textContent = 'her voice';
+    el('voice-note').className = '';
+  }
+}
+
 function meterLoop() {
   requestAnimationFrame(meterLoop);
+  meterOutgoing();
+
   // Nothing to meter until the iPad's audio is actually arriving.
   if (!monAnalyser || !monSource) return;
   if (!monBuf) monBuf = new Uint8Array(monAnalyser.fftSize);

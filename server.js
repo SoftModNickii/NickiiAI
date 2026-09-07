@@ -151,7 +151,7 @@ let cachedIceCandidates = [];
 const state = {
   startedAt: Date.now(),
   monitorUp: false,
-  feed: { video: false, audio: false },
+  feed: { video: false, audio: false, heard: false },
   viewer: null,                     // last self report from the iPad
   mode: 'calm',                     // 'calm' | 'live'
   liveSince: null,
@@ -207,7 +207,9 @@ function health() {
     whisperCheckedAt: state.whisperCheckedAt,
     whisperUrl: state.whisperUrl,
     monitorFeedUp: state.monitorUp,
-    outgoingFeed: { video: state.feed.video, audio: state.feed.audio },
+    // heard is the useful one: audio says a track exists, heard says it
+    // carries something. A silent BlackHole looks perfectly healthy otherwise.
+    outgoingFeed: { video: state.feed.video, audio: state.feed.audio, heard: state.feed.heard },
     surface: state.mode,
     liveForSeconds: state.liveSince ? Math.round((Date.now() - state.liveSince) / 1000) : null,
     viewer: state.viewer && (Date.now() - state.viewer.at < 15000) ? state.viewer : null,
@@ -528,7 +530,7 @@ wss.on('connection', (ws, req) => {
         cachedOffer = null;
         cachedIceCandidates = [];
         state.monitorUp = false;
-        state.feed = { video: false, audio: false };
+        state.feed = { video: false, audio: false, heard: false };
         clearTimeout(handbackTimer);
         log('controller.register', {});
         sendToController({ type: 'viewer-count', count: clients.viewers.size });
@@ -652,7 +654,7 @@ wss.on('connection', (ws, req) => {
         if (state.feed.video !== !!data.video || state.feed.audio !== !!data.audio) {
           log('feed.status', { video: !!data.video, audio: !!data.audio });
         }
-        state.feed = { video: !!data.video, audio: !!data.audio };
+        state.feed = { video: !!data.video, audio: !!data.audio, heard: !!data.heard };
         break;
 
       case 'clear-cache':
@@ -672,7 +674,7 @@ wss.on('connection', (ws, req) => {
       cachedOffer = null;
       cachedIceCandidates = [];
       state.monitorUp = false;
-      state.feed = { video: false, audio: false };
+      state.feed = { video: false, audio: false, heard: false };
       followWhisper(null);
       log('controller.disconnect', { note: 'cache cleared' });
       // She may simply have shut the laptop. Give her a moment to come back
