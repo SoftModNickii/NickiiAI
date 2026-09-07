@@ -41,9 +41,13 @@ module.exports = {
   // Set these to match the OBS canvas. If the iPad is mounted in portrait,
   // make the OBS canvas portrait too: a landscape source on a portrait screen
   // is cropped at the sides and then upscaled far harder than it needs to be.
+  // Portrait, because the iPad is mounted portrait and everything is shot for
+  // it. The OBS canvas has to be 1080x1920 as well: a landscape source on a
+  // portrait screen is cropped at the sides and then upscaled far harder than
+  // it needs to be, and her live feed would not match the sequences.
   capture: {
-    width: 1920,
-    height: 1080,
+    width: 1080,
+    height: 1920,
     frameRate: 30,
     maxBitrate: 12000000,   // a private LAN with no uplink, so spend it on picture
   },
@@ -86,7 +90,10 @@ module.exports = {
   video: {
     dir: './public/video',
     calm: 'calm.mp4',
-    responses: ['response-1.mp4', 'response-2.mp4', 'response-3.mp4', 'response-4.mp4'],
+    // One so far. They play in rotation, so add the others here as they are
+    // cut: a name listed with no file behind it is a visitor holding the
+    // button and getting nothing.
+    responses: ['response-1.mp4'],
     // Everything dissolves out through the field and reforms, rather than
     // cross-fading. It matches how she arrives at boot, and it means one
     // canvas and one shader pass instead of two.

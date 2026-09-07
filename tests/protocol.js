@@ -118,7 +118,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
     check('GET /health', health0.status === 200 && JSON.parse(health0.body).ok === true);
     check('no STUN in local mode', JSON.parse(cfg.body).iceServers.length === 0);
-    check('config carries capture constraints', JSON.parse(cfg.body).capture.width === 1920);
+    // Portrait is not a preference, it is the piece: the iPad is mounted that
+    // way and the sequences are shot for it. A landscape capture here would
+    // centre-crop her live feed while the loop filled the screen, and the two
+    // would stop being the same thing.
+    check('the capture is portrait, like the iPad',
+      JSON.parse(cfg.body).capture.height > JSON.parse(cfg.body).capture.width,
+      `${JSON.parse(cfg.body).capture.width}x${JSON.parse(cfg.body).capture.height}`);
     check('config carries render settings', JSON.parse(cfg.body).render.bicubic === true);
     check('visitor surface serves', idx.status === 200 && idx.body.includes('Hold to speak'));
     check('controller serves', ctl.status === 200 && ctl.body.includes('id="stream"'));
