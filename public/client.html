@@ -1299,7 +1299,14 @@ function addIncomingIce(c) {
 // types. Never recorded anywhere: it goes to her earpiece and nowhere else.
 function openMonitorFeed() {
   if (!micStream) return;
-  if (monitorPc) { try { monitorPc.close(); } catch (e) {} }
+  // Already up, or on its way. Rebuilding here is what made it flap: every
+  // socket reconnect tore down a perfectly good connection and started again,
+  // and she heard the room cut in and out.
+  if (monitorPc) {
+    var st = monitorPc.connectionState;
+    if (st === 'connected' || st === 'connecting' || st === 'new') return;
+    try { monitorPc.close(); } catch (e) {}
+  }
   monitorPc = new RTCPeerConnection(rtcConfig());
 
   micStream.getAudioTracks().forEach(function (t) { monitorPc.addTrack(t, micStream); });
@@ -1308,7 +1315,15 @@ function openMonitorFeed() {
     if (ev.candidate) net.send({ type: 'return-feed-ice', candidate: ev.candidate, target: 'controller' });
   };
   monitorPc.onconnectionstatechange = function () {
-    if (monitorPc.connectionState === 'failed') restartMonitorIce();
+    var st = monitorPc.connectionState;
+    if (st === 'failed') restartMonitorIce();
+    // 'disconnected' often recovers on its own within a few seconds. Give it
+    // that chance before restarting, then insist.
+    if (st === 'disconnected') {
+      setTimeout(function () {
+        if (monitorPc && monitorPc.connectionState === 'disconnected') restartMonitorIce();
+      }, 4000);
+    }
   };
 
   negotiateMonitor(false);
@@ -2118,12 +2133,19 @@ setInterval(function () {
 // ------------------------------------------------------------ stay awake
 var wakeLock = null;
 function keepAwake() {
-  if (!('wakeLock' in navigator)) return;
+  if (!('wakeLock' in navigator) || wakeLock) return;
   navigator.wakeLock.request('screen').then(function (l) {
     wakeLock = l;
     l.addEventListener('release', function () { wakeLock = null; });
-  }).catch(function () {});
+  }).catch(function () {
+    // iPadOS refuses this without user activation, and the installation runs
+    // for days without any. Keep asking: the first visitor to touch the glass
+    // grants it, and Guided Access with Auto-Lock Never is the real safety net
+    // underneath either way.
+  });
 }
+setInterval(keepAwake, 30000);
+document.addEventListener('pointerdown', keepAwake, { passive: true });
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible') {
     if (!wakeLock) keepAwake();

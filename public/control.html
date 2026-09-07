@@ -444,8 +444,17 @@ function connect() {
 function onMessage(data) {
   switch (data.type) {
     case 'viewer-count':
-      setDot('view', data.count > 0, String(data.count));
+      viewerCount = data.count;
+      setDot('view', data.count === 1, String(data.count));
       if (!data.count) { lastViewer = null; el('v-ipad').textContent = 'not connected'; }
+      // The installation has exactly one surface. There is a single peer
+      // connection here, so with two connected only one of them gets the
+      // picture, and which one is arbitrary. Silently half working is the
+      // worst outcome, so say it plainly.
+      if (data.count > 1) {
+        el('v-ipad').innerHTML = '<span class="warn">' + data.count +
+          ' surfaces, only one gets the picture. Close the spare tab.</span>';
+      }
       break;
     case 'request-offer': if (localStream) createAndSendOffer(); break;
     case 'webrtc-answer': handleAnswer(data.answer); break;
@@ -464,8 +473,10 @@ function onMessage(data) {
 // surface can be connected, reporting every field green, and still be running
 // at eight frames a second because the render pass is thermally throttled.
 var lastViewer = null;
+var viewerCount = 0;
 function showViewer(v) {
   lastViewer = v;
+  if (viewerCount > 1) return;      // the count warning is more important
   var el2 = el('v-ipad');
   var bad = [];
   if (v.render !== 'webgl') bad.push('no render pass');
