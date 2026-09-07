@@ -76,7 +76,12 @@ ok "source is on the Pi"
 # costs nothing and a newly cut one goes over on its own.
 if compgen -G "$REPO/public/video/*.mp4" >/dev/null 2>&1; then
   printf "\n  sending the sequences\n"
-  rsync -a --info=progress2 \
+  # --progress, not --info=progress2: macOS ships openrsync, which speaks the
+  # 2.6.9 protocol and has never heard of the newer flag. --partial so a
+  # transfer interrupted halfway over 2.4 GHz resumes instead of restarting.
+  # No -z here, unlike the source: H.264 is already compressed, and squeezing
+  # it again only costs the Pi CPU it needs for serving.
+  rsync -a --progress --partial \
     -e "ssh ${SSH_OPTS[*]}" \
     "$REPO"/public/video/*.mp4 \
     "$USER_AT@$HOST:/home/$USER_AT/nickii/public/video/" 2>&1 | sed 's/^/       /'
@@ -117,8 +122,18 @@ case "$HEALTH" in
     ;;
 esac
 
-curl -sko /dev/null -w "" --max-time 5 "https://$HOST/video/calm.mp4" \
-  && ok "the sequences are being served" || warn "the loop video did not answer"
+CALM_BYTES="$(curl -skI --max-time 5 "https://$HOST/video/calm.mp4" 2>/dev/null \
+  | awk 'tolower($1) == "content-length:" { gsub(/\r/, "", $2); print $2 }')"
+if [ -z "$CALM_BYTES" ]; then
+  warn "the loop video did not answer"
+elif [ "$CALM_BYTES" -lt 1000000 ]; then
+  # A placeholder answers with a perfectly good 200, so the check has to be
+  # about the size. This is what a failed video transfer actually looks like.
+  bad "the loop on the Pi is only $((CALM_BYTES / 1024)) KB, which is a placeholder"
+  note "the real sequences did not make it over. Run this again."
+else
+  ok "the loop is on the Pi, $((CALM_BYTES / 1024 / 1024)) MB"
+fi
 
 # ---------------------------------------------------------------- keep it
 # The access point undoes itself unless somebody confirms it works. Being here,
