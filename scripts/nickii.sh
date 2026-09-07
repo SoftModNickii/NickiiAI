@@ -12,6 +12,12 @@
 #
 # OBS is deliberately not started here. It is a performance instrument, not a
 # daemon, and section 12 of NICKIIAI.md keeps it under her hand.
+#
+# Two shapes, and this works out which one it is in rather than asking. In the
+# gallery the Pi is the server and this Mac is only an instrument: whisper, OBS
+# and her controller. Everywhere else this Mac is the whole system. Choosing
+# wrong by hand gives a dead installation with every light still green, so it
+# is not left to a flag on a show morning.
 
 set -uo pipefail
 
@@ -30,6 +36,29 @@ note(){ printf "     ${dim}%s${off}\n" "$1"; }
 
 listening(){ lsof -ti :"$1" >/dev/null 2>&1; }
 
+# ---------------------------------------------------------------- which machine is the server
+# An address that answers /health and is not one of this Mac's own addresses is
+# the installation. The self check matters: with dns.js running, nickii.ai is
+# this Mac, and without it the Mac would find itself and hand over to itself.
+is_self(){
+  local ip
+  ip="$(dscacheutil -q host -a name "$1" 2>/dev/null | awk '/^ip_address:/{print $2; exit}')"
+  [ -z "$ip" ] && return 1
+  ifconfig 2>/dev/null | grep -qw "inet $ip"
+}
+
+PI_HOST=""
+find_pi(){
+  local cand
+  for cand in nickii.ai nickii-pi.local; do
+    is_self "$cand" && continue
+    if curl -sk --max-time 3 "https://$cand/health" 2>/dev/null | grep -q '"ok":true'; then
+      PI_HOST="$cand"; return 0
+    fi
+  done
+  return 1
+}
+
 # ---------------------------------------------------------------- stop
 if [ "${1:-start}" = "stop" ]; then
   printf "\n${bold}Stopping NICKII AI${off}\n\n"
@@ -45,7 +74,13 @@ show_status(){
   printf "\n${bold}NICKII AI${off}\n\n"
 
   listening "$WHISPER_PORT" && ok "whisper listening on $WHISPER_PORT" || bad "whisper is not running"
-  listening "$PORT"        && ok "server listening on $PORT"          || bad "server is not running"
+
+  if [ -n "$PI_HOST" ]; then
+    ok "the installation is serving from $PI_HOST, this Mac is the instrument"
+    return 0
+  fi
+
+  listening "$PORT" && ok "server listening on $PORT" || bad "server is not running"
 
   if [ -f certs/nickii.local.pem ]; then
     local exp; exp="$(openssl x509 -in certs/nickii.local.pem -noout -enddate 2>/dev/null | sed 's/notAfter=//')"
@@ -70,11 +105,15 @@ show_status(){
 
 # ---------------------------------------------------------------- preflight
 if [ "${1:-start}" = "status" ]; then
+  find_pi || true
   show_status
 
-  if listening "$PORT"; then
+  HEALTH_URL=""
+  if [ -n "$PI_HOST" ]; then HEALTH_URL="https://$PI_HOST/health"
+  elif listening "$PORT"; then HEALTH_URL="https://127.0.0.1:$PORT/health"; fi
+  if [ -n "$HEALTH_URL" ]; then
     printf "\n"
-    curl -sk --max-time 4 "https://127.0.0.1:$PORT/health" 2>/dev/null \
+    curl -sk --max-time 4 "$HEALTH_URL" 2>/dev/null \
       | python3 -m json.tool 2>/dev/null || note "health endpoint did not answer"
   fi
   printf "\n"
@@ -84,6 +123,77 @@ fi
 printf "\n${bold}Starting NICKII AI${off}\n\n"
 
 command -v node >/dev/null || { bad "node is not installed"; exit 1; }
+
+find_pi || true
+
+# ---------------------------------------------------------------- instrument mode
+if [ -n "$PI_HOST" ]; then
+  ok "the installation is answering at $PI_HOST"
+  note "this Mac is the instrument: whisper, OBS and the controller"
+
+  # Bound to the network, not to localhost, because the thing that needs to
+  # reach whisper is the Pi. That network has no uplink and nothing else on it.
+  export NICKII_WHISPER_HOST="${NICKII_WHISPER_HOST:-0.0.0.0}"
+
+  if listening "$WHISPER_PORT"; then
+    if lsof -nP -i "TCP:$WHISPER_PORT" -sTCP:LISTEN 2>/dev/null | grep -q '127.0.0.1:'; then
+      warn "whisper is running but only on localhost, so the Pi cannot reach it"
+      note "restarting it on the network"
+      pkill -f "whisper-server" 2>/dev/null; sleep 1
+    else
+      ok "whisper already running on the network"
+    fi
+  fi
+
+  if ! listening "$WHISPER_PORT"; then
+    if ! command -v whisper-server >/dev/null; then
+      warn "whisper-server not installed, visitor messages will not transcribe"
+      note "brew install whisper-cpp"
+    else
+      printf "     starting whisper... "
+      nohup ./scripts/start-whisper.sh > logs/whisper.log 2>&1 &
+      for _ in $(seq 1 60); do listening "$WHISPER_PORT" && break; sleep 1; done
+      if listening "$WHISPER_PORT"; then printf "${green}up${off}\n"
+      else printf "${red}failed${off}\n"; note "see logs/whisper.log"; fi
+    fi
+  fi
+
+  # The Pi says whether it can actually see whisper. This is the one number
+  # worth waiting for: everything else can be green while messages go nowhere.
+  printf "     asking the installation...  "
+  REACH=""
+  for _ in $(seq 1 20); do
+    REACH="$(curl -sk --max-time 3 "https://$PI_HOST/health" 2>/dev/null)"
+    case "$REACH" in *'"whisperReachable":true'*) break ;; esac
+    sleep 1
+  done
+  case "$REACH" in
+    *'"whisperReachable":true'*) printf "${green}it can hear whisper${off}\n" ;;
+    *) printf "${yellow}it cannot reach whisper${off}\n"
+       note "the Pi needs NICKII_WHISPER_URL=http://$(scutil --get LocalHostName 2>/dev/null || echo nickii).local:$WHISPER_PORT/inference in its .env" ;;
+  esac
+
+  case "$REACH" in
+    *'"surface":"live"'*) note "the surface is LIVE right now" ;;
+    *'"surface":"calm"'*) note "the surface is on the calm loop" ;;
+  esac
+
+  printf "\n${bold}The installation${off}\n"
+  printf "     iPad        ${bold}https://%s/${off}\n" "$PI_HOST"
+  printf "     controller  https://%s/control\n" "$PI_HOST"
+
+  printf "\n${bold}Before visitors${off}\n"
+  note "OBS: scene collection loaded, Virtual Camera started, monitoring to BlackHole"
+  note "Controller: Cmd+. and check Picture reads 1920 x 1080, limited by none"
+  note "Earpiece in, output device confirmed, monitor level tested"
+  printf "\n"
+
+  open "https://$PI_HOST/control" 2>/dev/null
+
+  printf "${dim}The installation runs on the Pi and keeps running without this Mac.${off}\n"
+  printf "${dim}Closing this window leaves whisper up; ./scripts/nickii.sh stop ends it.${off}\n\n"
+  exit 0
+fi
 
 # ---------------------------------------------------------------- certificate
 # The Mac's address changes every time she moves network, and the certificate

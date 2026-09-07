@@ -110,18 +110,40 @@ Everything below replaces the Mac-as-router setup for the exhibition. The Pi is 
 that stays in the gallery: it is the access point, the server and the video store. The MacBook
 is an instrument she brings and takes away.
 
+Run it in two halves, because they carry different risk.
+
 ```sh
-sudo NICKII_WIFI_PASS='something-long' ./scripts/setup-pi.sh
+sudo ./scripts/setup-pi.sh --service                            # safe over SSH
+sudo NICKII_WIFI_PASS='something-long' ./scripts/setup-pi.sh --ap   # kills your SSH session
 ```
 
-One run on a fresh Raspberry Pi OS. It installs node, hostapd and dnsmasq, tells NetworkManager
-to leave `wlan0` alone (on Bookworm it otherwise fights hostapd for the interface), pins the Pi
-to `192.168.2.1`, makes `nickii.ai` resolve to it, and installs a systemd service so the whole
-thing comes back after a power cut with nobody present.
+`--service` installs node and a systemd unit that binds port 443, so the URL has no port in it
+and the whole thing comes back after a power cut with nobody present.
 
-**`ap_isolate=0` is not optional.** The iPad and the MacBook must reach each other directly: the
-media connections use host ICE candidates only, no STUN and no TURN. Any isolation between them
-means no picture and no sound, while every status on the Mac still reads green (4b).
+`--ap` makes the Pi its own network. It pins itself to `192.168.2.1`, brings its own DHCP and
+DNS, and makes `nickii.ai` resolve there. Raspberry Pi OS has used NetworkManager since
+Bookworm, and NetworkManager does all of this itself with `ipv4.method=shared`: the older
+hostapd, dnsmasq and `dhcpcd.conf` arrangement is not used and would only fight it for the
+interface.
+
+An SSH session dies the moment `--ap` succeeds, because the Pi has left the network you were
+both on. That is success, not failure.
+
+**Confirm it, or it undoes itself.** `--ap` arms a dead-man switch before it switches: if
+nobody confirms within twelve minutes, the Pi returns to the network it came from. This is not
+caution for its own sake. The Pi is set up over SSH with no keyboard and no screen attached, so
+a failed access point would leave nothing at all to log in with. Join the new network, check
+`https://nickii.ai/` answers, then:
+
+```sh
+sudo ./scripts/setup-pi.sh --ap-confirm
+```
+
+Until that runs, every reboot is safe to attempt and nothing is permanent.
+
+**`ap-isolation 0` is not optional.** The iPad and the MacBook must reach each other directly:
+the media connections use host ICE candidates only, no STUN and no TURN. Any isolation between
+them means no picture and no sound, while every status on the Mac still reads green (4b).
 
 Four things afterwards, once:
 

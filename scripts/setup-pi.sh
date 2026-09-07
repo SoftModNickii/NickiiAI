@@ -1,104 +1,58 @@
 #!/bin/bash
-# NICKII AI on a Raspberry Pi. Section 11e.
+# NICKII AI on a Raspberry Pi. Sections 11e and 4b of NICKIIAI.md.
 #
-# The Pi is the installation: it is the access point, the server and the video
-# store, and it is the only thing that stays in the gallery. The MacBook is an
-# instrument she brings and takes away.
+# The Pi is the installation: access point, server and video store, and the only
+# thing that stays in the gallery. The MacBook is an instrument she brings and
+# takes away.
 #
-# Run once on a fresh Raspberry Pi OS (Bookworm or later), as a normal user:
+#   sudo ./scripts/setup-pi.sh --service     install the server, leave the network alone
+#   sudo ./scripts/setup-pi.sh --ap          turn this Pi into the NICKII access point
+#   sudo ./scripts/setup-pi.sh               both, service first
+#   sudo ./scripts/setup-pi.sh --ap-confirm  the access point works, keep it
 #
-#   sudo ./scripts/setup-pi.sh
+# --service is safe to run over SSH. --ap is not: the Pi leaves whatever network
+# it is on to become its own, so an SSH session over Wi-Fi dies at that moment.
+# That is success, not failure.
 #
-# Afterwards the Pi broadcasts NICKII, serves the app, and starts itself after
-# a power cut with nothing plugged in and nobody present.
+# Raspberry Pi OS has used NetworkManager since Bookworm, and NetworkManager can
+# be the access point on its own: ipv4.method=shared brings its own DHCP and DNS.
+# The older hostapd, dnsmasq and dhcpcd.conf arrangement is not used here and
+# would fight NetworkManager for the interface if it were.
 
 set -euo pipefail
 
-[ "$(id -u)" = "0" ] || { echo "Needs root:  sudo $0"; exit 1; }
+[ "$(id -u)" = "0" ] || { echo "Needs root:  sudo $0 $*"; exit 1; }
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-RUN_USER="${SUDO_USER:-pi}"
+RUN_USER="${SUDO_USER:-nickii-pi}"
 SSID="${NICKII_SSID:-NICKII}"
 PASS="${NICKII_WIFI_PASS:-}"
-IP="192.168.2.1"
+IP="${NICKII_AP_IP:-192.168.2.1}"
+BAND="${NICKII_BAND:-bg}"          # bg = 2.4 GHz, better through walls. a = 5 GHz, faster.
+REVERT="${NICKII_AP_REVERT:-720}"  # seconds before an unconfirmed access point gives up. 0 disables.
+PORT="${NICKII_PORT:-443}"
 
-if [ -z "$PASS" ]; then
-  echo "Set a Wi-Fi password first:"
-  echo "  sudo NICKII_WIFI_PASS='something-long' $0"
-  exit 1
-fi
-[ ${#PASS} -ge 8 ] || { echo "WPA needs at least 8 characters."; exit 1; }
+DO_SERVICE=0; DO_AP=0
+case "${1:-both}" in
+  --service) DO_SERVICE=1 ;;
+  --ap)      DO_AP=1 ;;
+  both|"")   DO_SERVICE=1; DO_AP=1 ;;
+  --ap-confirm)
+    # The access point is reachable, so stand the dead-man switch down.
+    systemctl stop nickii-ap-revert.timer >/dev/null 2>&1 || true
+    systemctl reset-failed nickii-ap-revert.service >/dev/null 2>&1 || true
+    rm -f /usr/local/sbin/nickii-ap-revert.sh
+    nmcli connection modify nickii-ap connection.autoconnect yes >/dev/null 2>&1 || true
+    echo "Confirmed. ${SSID} is now this Pi's permanent network."
+    exit 0 ;;
+  *) echo "usage: $0 [--service|--ap|--ap-confirm]"; exit 1 ;;
+esac
 
-echo
-echo "NICKII AI, Raspberry Pi setup"
-echo "  repo:  $REPO"
-echo "  user:  $RUN_USER"
-echo "  ssid:  $SSID at $IP"
-echo
+# ---------------------------------------------------------------- the service
+if [ "$DO_SERVICE" = "1" ]; then
+  echo "==> installing the server as a service"
 
-# ---------------------------------------------------------------- packages
-apt-get update -qq
-apt-get install -y -qq nodejs npm hostapd dnsmasq >/dev/null
-systemctl unmask hostapd 2>/dev/null || true
-
-# ---------------------------------------------------------------- the network
-# NetworkManager ships on Bookworm and will fight hostapd over wlan0 unless it
-# is told this interface is not its business.
-if systemctl is-active --quiet NetworkManager; then
-  mkdir -p /etc/NetworkManager/conf.d
-  cat > /etc/NetworkManager/conf.d/nickii-unmanaged.conf <<EOF
-[keyfile]
-unmanaged-devices=interface-name:wlan0
-EOF
-  systemctl reload NetworkManager || true
-fi
-
-cat > /etc/hostapd/hostapd.conf <<EOF
-interface=wlan0
-driver=nl80211
-ssid=${SSID}
-hw_mode=g
-channel=7
-wmm_enabled=1
-auth_algs=1
-ignore_broadcast_ssid=0
-wpa=2
-wpa_passphrase=${PASS}
-wpa_key_mgmt=WPA-PSK
-rsn_pairwise=CCMP
-# Client isolation must stay OFF. The iPad and the MacBook have to reach each
-# other directly: the media connections use host ICE candidates only, with no
-# STUN and no TURN, so anything between them means no picture and no sound.
-ap_isolate=0
-EOF
-sed -i 's|^#\?DAEMON_CONF=.*|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' /etc/default/hostapd
-
-cat > /etc/dnsmasq.d/nickii.conf <<EOF
-interface=wlan0
-dhcp-range=192.168.2.10,192.168.2.60,255.255.255.0,24h
-# Hers is the only name that resolves here, and it resolves to this Pi.
-address=/nickii.ai/${IP}
-address=/www.nickii.ai/${IP}
-EOF
-
-# Static address on the AP side, so the certificate never has to be reissued.
-if ! grep -q "nickii" /etc/dhcpcd.conf 2>/dev/null; then
-  cat >> /etc/dhcpcd.conf <<EOF
-
-# nickii
-interface wlan0
-static ip_address=${IP}/24
-nohook wpa_supplicant
-EOF
-fi
-
-# ---------------------------------------------------------------- the app
-sudo -u "$RUN_USER" npm --prefix "$REPO" install --omit=dev --silent
-
-# 443 without root: let the service bind low ports rather than run as root.
-setcap 'cap_net_bind_service=+ep' "$(command -v node)" || true
-
-cat > /etc/systemd/system/nickii.service <<EOF
+  cat > /etc/systemd/system/nickii.service <<EOF
 [Unit]
 Description=NICKII AI
 After=network.target
@@ -107,32 +61,94 @@ After=network.target
 Type=simple
 User=${RUN_USER}
 WorkingDirectory=${REPO}
-Environment=NICKII_PORT=443
+Environment=NICKII_PORT=${PORT}
 EnvironmentFile=-${REPO}/.env
 ExecStart=$(command -v node) ${REPO}/server.js
 Restart=always
 RestartSec=3
+# Binding 443 as a normal user. Granting the capability here rather than with
+# setcap on the node binary, because setcap is wiped by every node upgrade.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable --now hostapd dnsmasq nickii >/dev/null 2>&1 || true
+  systemctl daemon-reload
+  systemctl enable nickii >/dev/null 2>&1
+  systemctl restart nickii
+  sleep 3
+  systemctl is-active --quiet nickii && echo "    service running on port ${PORT}" \
+    || { echo "    service FAILED:"; journalctl -u nickii -n 15 --no-pager | sed 's/^/      /'; }
+fi
+
+# ---------------------------------------------------------------- the network
+if [ "$DO_AP" = "1" ]; then
+  [ -n "$PASS" ] || { echo "Set a Wi-Fi password:  sudo NICKII_WIFI_PASS='...' $0 --ap"; exit 1; }
+  [ ${#PASS} -ge 8 ] || { echo "WPA needs at least 8 characters."; exit 1; }
+
+  echo "==> making this Pi the ${SSID} access point at ${IP}"
+
+  # Hers is the only name that resolves on this network, and it resolves here.
+  # NetworkManager runs its own dnsmasq for shared connections; this is how you
+  # add to it.
+  mkdir -p /etc/NetworkManager/dnsmasq-shared.d
+  cat > /etc/NetworkManager/dnsmasq-shared.d/nickii.conf <<EOF
+address=/nickii.ai/${IP}
+address=/www.nickii.ai/${IP}
+EOF
+
+  nmcli connection delete nickii-ap >/dev/null 2>&1 || true
+  nmcli connection add type wifi ifname wlan0 con-name nickii-ap autoconnect yes ssid "$SSID" >/dev/null
+  nmcli connection modify nickii-ap \
+    802-11-wireless.mode ap \
+    802-11-wireless.band "$BAND" \
+    wifi-sec.key-mgmt wpa-psk \
+    wifi-sec.psk "$PASS" \
+    ipv4.method shared \
+    ipv4.addresses "${IP}/24" \
+    ipv6.method disabled \
+    connection.autoconnect-priority 100
+  # This is load bearing: the iPad and the MacBook must reach each other
+  # directly. The media connections use host ICE candidates only, no STUN and
+  # no TURN, so any client isolation means no picture and no sound (4b).
+  nmcli connection modify nickii-ap 802-11-wireless.ap-isolation 0 2>/dev/null || true
+
+  # A dead-man switch, because of how this is actually run: over SSH, on a Pi
+  # with no keyboard and no screen. If the access point does not come up, there
+  # is nothing left to log in with. So the Pi returns to the network it was on
+  # unless somebody confirms the access point works.
+  PREV="$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$2 == "wlan0" { print $1; exit }')"
+  if [ -n "$PREV" ] && [ "$REVERT" != "0" ]; then
+    cat > /usr/local/sbin/nickii-ap-revert.sh <<EOF
+#!/bin/bash
+nmcli connection modify nickii-ap connection.autoconnect no || true
+nmcli connection down nickii-ap || true
+nmcli connection up "${PREV}" || true
+EOF
+    chmod +x /usr/local/sbin/nickii-ap-revert.sh
+    systemctl reset-failed nickii-ap-revert.service >/dev/null 2>&1 || true
+    systemd-run --unit=nickii-ap-revert --on-active="$REVERT" \
+      /usr/local/sbin/nickii-ap-revert.sh >/dev/null 2>&1 || true
+    echo "    if this fails, the Pi returns to ${PREV} in $((REVERT / 60)) minutes"
+  fi
+
+  echo "    activating, this connection will drop if you are on Wi-Fi"
+  systemd-run --unit=nickii-ap-up --on-active=3 \
+    nmcli connection up nickii-ap >/dev/null 2>&1 || nmcli connection up nickii-ap || true
+fi
 
 echo
-echo "Done. After a reboot the Pi comes up on its own."
-echo
+echo "Done."
 echo "  network   ${SSID}"
 echo "  iPad      https://nickii.ai/"
 echo "  her       https://nickii.ai/control"
 echo
-echo "Still to do, once:"
-echo "  1. Put the certificate in ${REPO}/certs/ (issued for nickii.ai and ${IP})"
-echo "  2. Put the sequences in ${REPO}/public/video/  (see the README there)"
-echo "  3. Set the controller password in ${REPO}/.env :  NICKII_PASSWORD=..."
-echo "  4. Trust the mkcert root on the iPad, then Add to Home Screen"
-echo
+if [ "$DO_AP" = "1" ] && [ "$REVERT" != "0" ]; then
+  echo "  Join ${SSID}, check https://nickii.ai/ answers, then make it permanent:"
+  echo "    sudo $0 --ap-confirm"
+  echo
+fi
 echo "  systemctl status nickii     is it running"
 echo "  journalctl -u nickii -f     what it is doing"
-echo
