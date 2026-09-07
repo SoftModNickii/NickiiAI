@@ -712,43 +712,8 @@ body.boot #status, body.wake #status, body.arriving #status { opacity: 0; }
    Nothing here says connecting, establishing or reconnecting: the visitor is
    meeting someone, not watching a session negotiate. */
 body.arriving #pane,
-body.arriving #invite,
-body.arriving #muted-choice { opacity: 0; pointer-events: none; }
+body.arriving #invite { opacity: 0; pointer-events: none; }
 body.arriving #presence { opacity: 1; }
-
-/* ------------------------------------------------------- the audio ritual */
-#muted-choice, #sound-off {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 12px 22px;
-  border-radius: 100px;
-  border: 1px solid transparent;
-  background: none;
-  font-family: var(--font-display);
-  cursor: pointer;
-  z-index: 5;
-  transition: opacity var(--dur-med) ease, background var(--dur-fast) ease;
-}
-#muted-choice .en, #sound-off .en {
-  font-size: 15px; font-weight: 400; letter-spacing: -0.01em; color: var(--ink-mid);
-}
-#muted-choice .de, #sound-off .de { font-size: 12px; font-weight: 400; color: var(--ink-lo); }
-#muted-choice:hover, #sound-off:hover { background: rgba(255,255,255,0.5); }
-#muted-choice:focus-visible, #sound-off:focus-visible {
-  outline: none; border-color: var(--ai-2); box-shadow: 0 0 0 4px rgba(180,134,220,0.18);
-}
-
-/* The quiet alternative sits under the button that starts everything. */
-body.boot #muted-choice { display: flex; bottom: calc(18vh + env(safe-area-inset-bottom)); }
-
-/* Playing silently is always recoverable, and always visible as a state. */
-body.muted #sound-off { display: flex; bottom: calc(var(--invite-bottom) + env(safe-area-inset-bottom)); }
-body.muted #invite { opacity: 0; pointer-events: none; }
 
 /* ---------------------------------------------------------- transcript */
 /* What the machine heard, in display type, straight on the field. No card:
@@ -934,21 +899,6 @@ body.offline #status .dot { background: var(--warn); }
 
 <div id="said"></div>
 
-<!-- The audio ritual. Safari will not play unmuted audio without a gesture,
-     and an installation that is silently muted looks identical to one that is
-     working. Asking outright removes the doubt, and running play() inside this
-     click is the most reliable unmuted path WebKit offers. -->
-<button id="muted-choice" type="button">
-  <span class="en">Continue without sound</span>
-  <span class="de">Ohne Ton fortfahren</span>
-</button>
-
-<!-- Shown only when she is playing silently, so it is always recoverable. -->
-<button id="sound-off" type="button">
-  <span class="en">Sound is off. Tap to enable.</span>
-  <span class="de">Ton aus. Zum Einschalten tippen.</span>
-</button>
-
 <div id="invite">
   <span class="en">Speak to Nickii AI</span>
   <span class="de">Mit Nickii AI sprechen</span>
@@ -1041,15 +991,37 @@ function setState(s) {
   body.classList.add(s);
 }
 
-// Whether the visitor asked for sound. Remembered, so a watchdog reload in the
-// middle of a show does not put the ritual back in front of the next visitor.
-var wantsSound = true;
-try { wantsSound = localStorage.getItem('nickii-muted') !== '1'; } catch (e) {}
-function rememberSound(on) {
-  wantsSound = on;
-  body.classList.toggle('muted', !on);
-  try { localStorage.setItem('nickii-muted', on ? '0' : '1'); } catch (e) {}
+// Sound is not a choice. The piece is her voice, and a silent surface is not a
+// quieter version of it but a different and lesser thing, so there is no
+// control to turn it off and nothing is persisted that could outlive the
+// visitor who set it. The iPad's own volume dial is the only say anyone has,
+// and that belongs to whoever installs it, not to whoever walks up to it.
+//
+// iOS still refuses unmuted playback until the page has earned it, so this
+// cannot be one attempt. It plays muted rather than not at all, and then keeps
+// asking: when capture starts, on any touch, and on a slow timer, because an
+// installation running alone for days may go a long while untouched.
+function audioEl() {
+  return (mode === 'live' && feedEl.srcObject) ? feedEl : playerEl;
 }
+
+function wantSound(el) {
+  el = el || audioEl();
+  if (!el || !el.muted) return;
+  el.muted = false;
+  el.volume = 1;
+  var p = el.play();
+  // Refused. Back to muted so the picture never dies, and ask again later.
+  if (p && p.catch) p.catch(function () { el.muted = true; });
+}
+
+// Only ever acts on a muted element. Never on a paused one: a response that
+// has ended is paused on purpose, and play() here would restart it under a
+// visitor who is already watching the loop again.
+setInterval(function () {
+  var el = audioEl();
+  if (el && el.muted) wantSound(el);
+}, 3000);
 
 var statusEl = document.getElementById('status-text');
 function setStatus(text) { if (statusEl) statusEl.textContent = text; }
@@ -1089,12 +1061,9 @@ function start(fromGesture) {
     return buildAudioGraph();
   }).then(function () {
     if (net && net.isOpen()) openMonitorFeed();
-    // Now that the page is capturing, the sound can come up.
-    if (wantsSound && playerEl && playerEl.muted) {
-      playerEl.muted = false;
-      playerEl.play().then(function () { body.classList.remove('muted'); })
-                     .catch(function () { playerEl.muted = true; });
-    }
+    // WebKit permits unmuted playback while the page is capturing, which makes
+    // this the one moment it can be relied on rather than hoped for.
+    wantSound();
     if (body.classList.contains('boot') || body.classList.contains('wake')) setState('idle');
   }).catch(function (err) {
     console.warn('microphone unavailable', err && err.name, err && err.message);
@@ -1245,9 +1214,8 @@ function resetIncoming() {
 // back to muted rather than to a dead screen: a silent Nickii is a diminished
 // piece, a black rectangle is no piece at all. The way back is on screen.
 function playFeed() {
-  feedEl.muted = !wantsSound;
+  feedEl.muted = false;
   feedEl.volume = 1;
-  body.classList.toggle('muted', !wantsSound);
 
   var p = feedEl.play();
   if (!p || !p.catch) return markFeedLive();
@@ -1256,7 +1224,6 @@ function playFeed() {
     console.warn('play refused', err && err.name);
     if (!feedEl.muted) {
       feedEl.muted = true;
-      body.classList.add('muted');
       feedEl.play().then(markFeedLive).catch(function () { setState('wake'); });
     } else {
       setState('wake');
@@ -1759,7 +1726,7 @@ function videoUrl(name) { return '/video/' + name; }
 
 function playSequence(name, loop) {
   playerEl.loop = !!loop;
-  playerEl.muted = !wantsSound;
+  playerEl.muted = false;
   playerEl.volume = 1;
   if (playerEl.getAttribute('src') !== videoUrl(name)) {
     playerEl.setAttribute('src', videoUrl(name));
@@ -1771,9 +1738,8 @@ function playSequence(name, loop) {
     p.then(markFeedLive).catch(function (e) {
       console.warn('sequence play refused', e && e.name);
       // Same fallback as the live feed: silent is a diminished piece, a blank
-      // screen is no piece at all.
+      // screen is no piece at all. The retry above brings the sound back up.
       playerEl.muted = true;
-      body.classList.add('muted');
       playerEl.play().then(markFeedLive).catch(function () { setState('wake'); });
     });
   } else {
@@ -1870,7 +1836,8 @@ document.addEventListener('pointerdown', function (ev) {
   if (body.classList.contains('ops-open')) return;
   // In boot, the tap that grants the microphone is also the tap that asks for
   // sound. One gesture, and play() lands inside it.
-  if (!started && body.classList.contains('boot')) { rememberSound(true); }
+  // Any touch is a gesture, and a gesture is what iOS is waiting for.
+  wantSound();
   // Nothing to press while she is arriving.
   if (body.classList.contains('arriving')) return;
   // A message is still in flight. Pressing again here would talk over the
@@ -2026,28 +1993,6 @@ function showTranscript(data) {
     }, 420);
   }, 3400);
 }
-
-// ------------------------------------------------------------ audio ritual
-document.getElementById('muted-choice').addEventListener('pointerdown', function (ev) {
-  ev.stopPropagation();
-  rememberSound(false);
-  if (!started) start(true).catch(function () {});
-  else playFeed();
-});
-
-document.getElementById('sound-off').addEventListener('pointerdown', function (ev) {
-  ev.stopPropagation();
-  rememberSound(true);
-  feedEl.muted = false;
-  feedEl.volume = 1;
-  feedEl.play().then(function () {
-    body.classList.remove('muted');
-  }).catch(function () {
-    // Still refused. Put it back rather than pretending it worked.
-    feedEl.muted = true;
-    rememberSound(false);
-  });
-});
 
 // ------------------------------------------------------------ operator panel
 // Four taps in the top left corner within two seconds. Guided Access is what

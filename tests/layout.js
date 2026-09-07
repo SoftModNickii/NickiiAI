@@ -33,7 +33,6 @@ const STATES = [
   'listening feed-live',
   'sent feed-live',
   'sent said feed-live',
-  'idle feed-live muted',
 ];
 const SIZES = [
   { name: 'landscape 1366x1024', w: 1366, h: 1024 },
@@ -53,7 +52,7 @@ const ALLOWED = new Set([
 
 const MEASURE = `
 window.__probe = function () {
-  var ids = ['#masthead', '#pane', '#invite', '#said', '#footer', '#muted-choice', '#sound-off'];
+  var ids = ['#masthead', '#pane', '#invite', '#said', '#footer'];
   var out = {};
   ids.forEach(function (sel) {
     var el = document.querySelector(sel);

@@ -95,7 +95,7 @@ const SURFACES = [
     name: 'visitor surface',
     // Everything the piece cannot run without.
     want: ['#presence', '#feed', '#render', '#edge', '#pane', '#pane .ring',
-           '#pane .arc', '#invite', '#said', '#muted-choice', '#sound-off',
+           '#pane .arc', '#invite', '#said',
            '#ops', '#ops-hot', '#masthead', '#footer', '#stage'],
   },
   {
@@ -131,6 +131,17 @@ check('the bloom steps rather than re-blurring every frame',
   /#edge \.bloom > i \{ animation-timing-function: steps\(/.test(client));
 check('the level analyser is idle unless someone is holding',
   /if \(!holding\) \{[\s\S]{0,200}return;/.test(client));
+
+// Sound is the piece, not a setting. There is no control to turn it off and
+// nothing persisted that could outlive the visitor who set it: an installation
+// that came up silent on Tuesday because somebody muted it on Monday is not a
+// quieter version of this work, it is a broken one.
+check('nothing on the glass can mute her',
+  !/sound-off|muted-choice|nickii-muted/.test(client));
+check('and no mute preference is ever stored',
+  !/localStorage[\s\S]{0,40}muted/.test(client));
+check('but a refusal still leaves a picture, and keeps asking',
+  /function wantSound/.test(client) && /setInterval\([\s\S]{0,160}wantSound/.test(client));
 
 console.log(failures === 0 ? '\nBoth surfaces run clean.\n' : `\n${failures} failed.\n`);
 process.exit(failures ? 1 : 0);
