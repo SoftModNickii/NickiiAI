@@ -69,6 +69,22 @@ rsync -az --delete \
 if [ "${PIPESTATUS[0]}" != "0" ]; then bad "rsync failed"; exit 1; fi
 ok "source is on the Pi"
 
+# The sequences go separately, and never with --delete. They are hundreds of
+# megabytes and they are not in git, so on a bad day this working copy is the
+# one without them, and a delete would empty the installation instead of
+# updating it. rsync sends only what actually differs, so an unchanged loop
+# costs nothing and a newly cut one goes over on its own.
+if compgen -G "$REPO/public/video/*.mp4" >/dev/null 2>&1; then
+  printf "\n  sending the sequences\n"
+  rsync -a --info=progress2 \
+    -e "ssh ${SSH_OPTS[*]}" \
+    "$REPO"/public/video/*.mp4 \
+    "$USER_AT@$HOST:/home/$USER_AT/nickii/public/video/" 2>&1 | sed 's/^/       /'
+  [ "${PIPESTATUS[0]}" = "0" ] && ok "the sequences are current" || warn "the sequences did not all go over"
+else
+  warn "no sequences in this working copy, the Pi keeps the ones it has"
+fi
+
 # Dependencies only when they actually changed, because npm on a Pi is slow and
 # a deploy that takes two minutes is a deploy nobody runs before a show.
 ssh "${SSH_OPTS[@]}" "$USER_AT@$HOST" \
